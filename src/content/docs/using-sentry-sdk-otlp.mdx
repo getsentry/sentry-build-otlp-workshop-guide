@@ -1,0 +1,138 @@
+---
+title: Using Sentry SDK with OTLP Integration
+description: Bridge OpenTelemetry instrumentation with Sentry SDK using the OTLP integration
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The Sentry SDK's OTLP integration provides a **hybrid approach** that combines the best of both worlds:
+
+- **OpenTelemetry for instrumentation** - Use standard OpenTelemetry libraries to capture traces
+- **Sentry SDK for data export** - Let Sentry handle the OTLP endpoint configuration and trace/span linking
+
+## How It Works
+
+When you enable the `OTLPIntegration` in the Sentry SDK, it automatically sets up:
+
+1. **SpanExporter** - Configures the OTLP ingestion endpoint from your Sentry DSN
+2. **Propagator** - Ensures distributed tracing works across services
+3. **Trace/Span Linking** - Connects traces with errors, logs, crons, and metrics in Sentry
+
+<Aside type="caution">
+**Important**: When using the OTLP integration, *do not* also configure tracing through the Sentry SDK's native tracing features. The OTLP integration handles all trace exports.
+</Aside>
+
+## Implementation Example (Python)
+
+Here's how to set up the OTLP integration with Python:
+
+<Steps>
+  1. **Install dependencies**
+
+     ```bash
+     pip install "sentry-sdk[opentelemetry-otlp]"
+     ```
+
+  2. **Configure OpenTelemetry instrumentation**
+
+     Set up the OpenTelemetry libraries you want to use for automatic instrumentation:
+
+     ```python
+     # For a Flask app
+     from opentelemetry.instrumentation.flask import FlaskInstrumentor
+     from opentelemetry.instrumentation.requests import RequestsInstrumentor
+     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+     
+     # Auto-instrument Flask
+     FlaskInstrumentor().instrument()
+     
+     # Auto-instrument outgoing HTTP requests
+     RequestsInstrumentor().instrument()
+     
+     # Auto-instrument database queries
+     SQLAlchemyInstrumentor().instrument()
+     ```
+
+  3. **Initialize Sentry with OTLP integration**
+
+     ```python
+     import sentry_sdk
+     from sentry_sdk.integrations.otlp import OTLPIntegration
+     
+     sentry_sdk.init(
+         dsn="YOUR_SENTRY_DSN",
+         
+         # Include user context data
+         send_default_pii=True,
+         
+         # Enable logs to be sent to Sentry
+         enable_logs=True,
+         
+         # Add the OTLP integration
+         integrations=[
+             OTLPIntegration(),
+         ],
+     )
+     ```
+
+     That's it! The Sentry SDK now handles all OTLP configuration.
+
+  4. **Run your application**
+
+     Your application will now:
+     - Capture traces via OpenTelemetry instrumentation
+     - Export traces to Sentry via the OTLP integration
+     - Automatically link traces with errors and logs
+     - Use proper distributed tracing propagation
+</Steps>
+
+## Key Benefits
+
+### 1. Automatic OTLP Endpoint Configuration
+No need to manually configure OTLP exporter endpoints - the SDK extracts it from your DSN:
+
+```python
+# ❌ Not needed - the integration handles this
+# otlp_endpoint = "https://o0.ingest.us.sentry.io/api/0/envelope/"
+# headers = {"Authorization": f"Bearer {auth_token}"}
+
+# ✅ Just provide your DSN
+dsn="https://PUBLIC_KEY@ORG.ingest.us.sentry.io/PROJECT_ID"
+```
+
+### 2. Trace/Span Linking with Other Sentry Data
+When errors occur, Sentry automatically links them to the active trace:
+
+```python
+import sentry_sdk
+
+def process_order(order_id):
+    # OpenTelemetry automatically creates a span
+    try:
+        result = calculate_total(order_id)
+    except Exception as e:
+        # This error will be linked to the trace automatically
+        sentry_sdk.capture_exception(e)
+        raise
+```
+
+In Sentry, you'll see the error with a direct link to the trace context.
+
+### 3. Proper Distributed Tracing Propagation
+The integration configures propagators to ensure traces flow across services using W3C standards:
+
+- `traceparent` header for W3C Trace Context
+- `baggage` header for additional context
+- Compatible with other OpenTelemetry services
+
+## Language Support
+
+The OTLP integration is currently available for:
+
+- **Python** (3.7+) - `sentry-sdk[opentelemetry-otlp]`
+- **JavaScript/Node.js** (coming soon)
+- Other languages in development
+
+Check the [Sentry documentation](https://docs.sentry.io/platforms/) for the latest language support.

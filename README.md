@@ -67,7 +67,7 @@ All commands are run from the root of the project:
 
 This workshop uses a separate demo application. The documentation guides you through cloning and setting it up:
 
-**Demo Application**: [otel-ecommerce](https://github.com/getsentry/otel-ecommerce)
+**Demo Application**: [sentry-build-otlp-workshop](https://github.com/getsentry/sentry-build-otlp-workshop)
 
 ## Workshop Technologies
 

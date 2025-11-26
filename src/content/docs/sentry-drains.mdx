@@ -1,0 +1,63 @@
+---
+title: Sentry Log and Trace Drains
+description: Configure external services to send logs and traces to Sentry via OTLP endpoints
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## What are Drains?
+
+Drains forward telemetry data from external platforms to Sentry using the OpenTelemetry Protocol (OTLP). This gives you visibility into:
+
+- **Runtime logs**: Application output from serverless functions, edge functions, etc.
+- **Build logs**: Output from build and deployment processes
+- **Static logs**: Logs from static asset serving
+- **Distributed traces**: Request flows across your services and infrastructure
+- **System logs**: Platform-level events and operations
+
+**Important limitation**: Drains do not capture error events—use Sentry SDKs for error monitoring.
+
+## Supported Platforms
+
+- [Vercel](https://docs.sentry.io/product/drains/integration/vercel/)
+- [Cloudflare](https://docs.sentry.io/product/drains/integration/cloudflare/)
+- [Heroku](https://docs.sentry.io/product/drains/integration/heroku/)
+- [Supabase](https://docs.sentry.io/product/drains/integration/supabase/)
+- [Shopify Hydrogen](https://docs.sentry.io/product/drains/integration/shopify-hydrogen/)
+
+## Get Your Sentry OTLP Endpoints
+
+Before configuring drains, you need your Sentry OTLP endpoints:
+
+<Steps>
+  1. **Open your Sentry project**
+
+  2. **Navigate to Client Keys (DSN)**
+
+     Go to **Settings** > **Projects** > [Your Project] > **Client Keys (DSN)**
+
+  3. **Click the OpenTelemetry (OTLP) tab**
+
+  4. **Copy the following values**:
+     - **OTLP Logs Endpoint** - For forwarding logs
+     - **OTLP Traces Endpoint** - For forwarding traces
+     - **Authentication Headers** - Required for both logs and traces
+</Steps>
+
+[add screenshot - project settings with otlp tab open]
+
+## Example: Configuring Vercel Drains 
+
+Vercel drains forward logs and traces from your Vercel deployments to Sentry.
+
+### Setting Up Log Drains
+
+[add screenshot - vercel drains settings page]
+
+## Configuration Tips
+
+- **Sampling rate**: Set to 100% to capture all telemetry (you can adjust later)
+- **Environment filtering**: Configure drains for specific environments (production, preview, etc.)
+- **Authentication**: Always include the `x-sentry-auth` header with your public DSN key
+- **Format**: Use protobuf encoding for better performance over JSON when available
+- **Compression**: Enable gzip compression to reduce bandwidth

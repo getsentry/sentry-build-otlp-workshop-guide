@@ -1,0 +1,51 @@
+---
+title: Workshop Overview
+description: Learn who this workshop is for and the use cases we'll cover
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Who This Workshop Is For
+
+This workshop is designed for developers and teams who are:
+
+- **Using OpenTelemetry** for instrumentation and want to leverage Sentry's traces, logs, and performance monitoring via OTLP
+- **Looking to connect existing monitoring solutions** by integrating OpenTelemetry traces with Sentry's SDKs
+
+## Use Cases We'll Cover
+
+### 1. OpenTelemetry Backend Only (via OTLP)
+
+You have a backend instrumented with OpenTelemetry and want to send traces directly to Sentry without installing the Sentry SDK.
+
+**Benefits**:
+- Minimal configuration required
+- No code changes to your application
+- Vendor-neutral instrumentation
+
+---
+
+### 2. Sentry Frontend + OTEL Backend (Distributed Tracing)
+
+You're using Sentry's SDK on your frontend and want to connect those traces with your OpenTelemetry-instrumented backend services.
+
+**Benefits**:
+- End-to-end visibility from user interaction to backend processing
+- Single trace ID spans your entire request lifecycle
+- Debug frontend issues with backend context
+
+---
+
+### 3. Sentry Backend Errors + OTEL Backend (WIP)
+
+You want to use Sentry's SDK for error tracking on your backend while also sending OpenTelemetry traces, ensuring both systems use the same trace IDs internally.
+
+**Benefits**:
+- Unified trace IDs between Sentry errors and OpenTelemetry traces
+- No manual trace ID coordination required
+- Rich error context from Sentry SDK combined with OpenTelemetry performance data
+- Best of both worlds: Sentry's error tracking + OpenTelemetry's flexibility
+
+**Status**: Work in Progress
+- Python SDK available now
+- Other language SDKs to follow

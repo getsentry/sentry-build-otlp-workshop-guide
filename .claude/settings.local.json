@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.sentry.io)",
+      "WebSearch"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

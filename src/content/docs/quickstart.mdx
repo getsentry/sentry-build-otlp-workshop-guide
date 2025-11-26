@@ -3,7 +3,15 @@ title: Quickstart Guide
 description: Get the OpenTelemetry E-commerce application running locally
 ---
 
-import { Steps } from '@astrojs/starlight/components';
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Work in Progress">
+This content is currently being updated and may be incomplete.
+</Aside>
+
+<Aside type="caution" title="Open Beta">
+This feature is currently in open beta. Please reach out to feedback-logging@sentry.io with any questions or feedback.
+</Aside>
 
 Follow this guide to get the OpenTelemetry E-commerce application running on your local machine. This is the application we'll use throughout the workshop to learn how to send OpenTelemetry data to Sentry.
 
@@ -13,9 +21,8 @@ Before you begin, ensure you have the following:
 
 - [Git](https://git-scm.com/downloads)
 - [Node.js](https://nodejs.org/) (version 18 or higher)
-- [Free Neon account](https://neon.tech/) (for PostgreSQL database)
-- [Free Sentry account](https://sentry.io/signup/) with OTLP enabled
-  - Create a **new project** in Sentry (any platform type works - we'll configure OTLP manually)
+- [Free Sentry account](https://sentry.io/signup/)
+  - Create a **new Express project** in Sentry
 
 :::tip[About the Demo Application]
 This is a full-stack e-commerce application with:
@@ -33,8 +40,8 @@ We'll use this app to demonstrate how OpenTelemetry data flows into Sentry and h
   1. **Clone the repository**
 
      ```bash
-     git clone https://github.com/jaffrepaul/otel-ecommerce
-     cd otel-ecommerce
+     git clone https://github.com/getsentry/sentry-build-otlp-workshop
+     cd sentry-build-otlp-workshop
      ```
 
   2. **Set up the Backend API**
@@ -97,90 +104,32 @@ We'll use this app to demonstrate how OpenTelemetry data flows into Sentry and h
 
      We'll configure the Sentry SDK settings in the next module.
 
-  7. **Verify Setup**
+  7. **Access the Application Project**
 
-     At this point, you should have:
-     - Neon PostgreSQL database created and configured
-     - Backend ready to start (we'll do this after configuring Sentry)
-     - Frontend ready to start
+     Start the backend API:
+
+     ```bash
+     # In the api directory
+     npm start
+     ```
+
+     In a new terminal, start the frontend:
+
+     ```bash
+     # In the frontend directory
+     npm run dev
+     ```
 </Steps>
 
-## What You've Set Up
+## What's Available After Setup
 
-Once you've completed these steps, you'll have:
+Once you've completed the setup, you'll have access to:
 
-- A **full-stack e-commerce application** ready for instrumentation
-- **Neon PostgreSQL database** (cloud-hosted) with products, users, and order tables
-- **Project structure** ready for OpenTelemetry and Sentry configuration
+- A **Vite-powered React frontend** running at http://localhost:5173
+- A **Node.js backend API** running at http://localhost:3001
+- **Full-stack JavaScript application** ready for Sentry instrumentation
 
-## Project Architecture
-
-The application you just set up has the following architecture:
-
-```
-┌─────────────────┐
-│  React Frontend │ (Sentry SDK - we'll configure this)
-│  Port: 5173     │
-└────────┬────────┘
-         │ HTTP + traceparent header
-         ▼
-┌─────────────────┐
-│  Express API    │ (OpenTelemetry - we'll configure this)
-│  Port: 3000     │
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    ▼         ▼
-┌────────┐ ┌───────┐
-│  Neon  │ │Payment│
-│Postgres│ │  API  │
-└────────┘ └───────┘
-         │
-         ▼
-┌─────────────────┐
-│     Sentry      │
-│  (OTLP + SDK)   │
-└─────────────────┘
-```
-
-## Application Features
-
-The e-commerce app includes:
-
-### Backend API Endpoints
-- `GET /api/products` - List all products
-- `GET /api/products/:id` - Get product details
-- `POST /api/orders` - Create an order
-- `GET /api/orders/:id` - Get order details
-
-### Frontend Pages
-- **Product List** - Browse all available products
-- **Product Detail** - View individual product information
-- **Shopping Cart** - Add/remove items
-- **Checkout** - Place orders with payment processing
-
-### Built-in Error Scenarios
-The application includes realistic error scenarios for testing:
-- Payment failures (10% random failure rate)
-- Inventory conflicts (insufficient stock)
-- Validation errors (invalid input)
-- Database query failures
-
-These will be useful when we explore debugging with distributed tracing later in the workshop.
-
-## Common Issues
-
-**"npx neondb command failed"**
-→ Make sure you have a Neon account at https://neon.tech/ and are logged in. You may need to authenticate first.
-
-**"Database connection error"**
-→ Check that your `DATABASE_URL` in `api/.env` is correctly set to your Neon database connection string.
-
-**"Port 3000 already in use"**
-→ Another application is using port 3000. Stop it or change `PORT=3001` in `api/.env`
-
-**"npm run db:setup fails"**
-→ Verify your Neon database connection by checking the `DATABASE_URL` environment variable. Make sure the database is accessible.
+This setup will allow you to progress through the workshop and start implementing Sentry. This workshop will take you through setting up Error Monitoring, Logging, Tracing, and building visualizations in dashboards!
 
 ## What's Next?
 
@@ -189,5 +138,3 @@ Now that your application is set up, we'll move on to:
 1. **Understanding Distributed Tracing** - Learn about traces, spans, and how they connect
 2. **Configuring OpenTelemetry** - Send backend traces to Sentry via OTLP
 3. **Connecting Frontend to Backend** - Enable distributed tracing across your full stack
-
-Keep your terminal windows open - we'll be starting the servers in the next modules!

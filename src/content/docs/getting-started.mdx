@@ -44,7 +44,7 @@ Select `React` and `Node.js` as the platforms respectively.
    ```
 2. **Initialize Sentry**
 
-   Create `./apps/frontend/src/instrument.ts`:
+   Create `./apps/frontend/src/instrument-sentry.ts`:
 
    ```js
    import * as Sentry from "@sentry/react";
@@ -78,7 +78,7 @@ Select `React` and `Node.js` as the platforms respectively.
 3. **Import and update your `main.tsx` entry point**
 
    ```js
-   import './instrument.js';
+   import './instrument-sentry.js';
    import { createRoot } from 'react-dom/client';
    import * as Sentry from '@sentry/react';
    import App from './App.tsx';
@@ -272,7 +272,7 @@ These configurations will setup your React frontend to leverage all of Sentry's 
 
 2. **Configure Sentry in your Node.js Server**
 
-   Create `instrument.ts` in your server directory:
+   Create `instrument-otel.ts` in your server directory:
 
    ```js
    import * as Sentry from '@sentry/node';
@@ -287,10 +287,10 @@ These configurations will setup your React frontend to leverage all of Sentry's 
    });
    ```
 
-3. **Add instrument.ts to your server entry point - index.ts**
+3. **Add instrument-otel.ts to your server entry point - index.ts**
 
    ```js
-   import './instrument';
+   import './instrument-otel';
    import * as Sentry from '@sentry/node';
 
    // Add this after all routes,

@@ -28,6 +28,10 @@ dist/
 *.swo
 *~
 
+# Claude Code settings
+.claude/
+.claudesettings
+
 # OS generated files
 .DS_Store
 .DS_Store?

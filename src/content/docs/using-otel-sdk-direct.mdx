@@ -1,0 +1,258 @@
+---
+title: Direct OTEL SDK-to-Sentry
+description: Send OpenTelemetry traces and logs directly from your SDK to Sentry's OTLP endpoints
+---
+
+import { Steps, Card, CardGrid } from '@astrojs/starlight/components';
+import ScaledImage from '../../components/ScaledImage.astro';
+
+There are multiple ways to send OTLP data to Sentry:
+- **Direct SDK → Sentry** (this guide) - Simplest setup, SDK sends directly to Sentry
+- **SDK → OpenTelemetry Collector → Sentry** - More control, can process/filter data
+- **Vercel/Cloudflare Drains → Sentry** - No SDK needed, platform forwards telemetry
+
+We'll start with the direct approach since it's the fastest way to get data flowing.
+
+## Getting Your Sentry OTLP Credentials
+
+Sentry provides all the OTLP configuration you need directly in the UI - no need to construct URLs manually!
+
+<Steps>
+  1. **Open your Sentry project**
+
+  2. **Navigate to Client Keys (DSN)**
+
+     Go to **Settings** > **Projects** > [Your Project] > **Client Keys (DSN)**
+
+  3. **Click the OpenTelemetry (OTLP) tab**
+
+     You'll see several pre-configured values ready to copy:
+
+  4. **Copy the following values** (click the copy icon next to each):
+     - **OTLP Traces Endpoint** - The full URL for sending traces
+     - **OTLP Traces Endpoint Headers** - The authentication header for traces
+     - **OTLP Logs Endpoint** - The full URL for sending logs
+     - **OTLP Logs Endpoint Headers** - The authentication header for logs
+
+     :::tip[Pro Tip]
+     All endpoints and headers are pre-configured with your organization, project ID, and authentication key. Just copy and paste them into your `.env` file!
+     :::
+</Steps>
+
+<ScaledImage src="/assets/img/otel_endpoints_sentry.gif" alt="Sentry OTLP Endpoints" size={100} />
+
+## Configuring Direct Mode
+
+Now let's configure the backend API to send data directly to Sentry's OTLP endpoints.
+
+<Steps>
+  1. **Open the backend .env file**
+
+     Navigate to the `api/` directory and open the `.env` file you created earlier:
+
+     ```bash
+     cd api
+     # Open .env in your editor
+     ```
+
+  2. **Add your Sentry OTLP configuration**
+
+     Update the following environment variables in `.env`:
+
+     ```bash
+     # Sentry OTLP Traces Endpoint & Auth Header (paste from Sentry UI)
+     OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=<paste OTLP Traces Endpoint>
+     OTEL_EXPORTER_OTLP_TRACES_HEADERS=<paste OTLP Traces Endpoint Header>
+
+     # Sentry OTLP Logs Endpoint & Auth Header (paste from Sentry UI)
+     OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=<paste OTLP Logs Endpoint>
+     OTEL_EXPORTER_OTLP_LOGS_HEADERS=<paste OTLP Logs Endpoint Header>
+     ```
+
+     Note: leave off the quotes around the headers values. This is nuance for this demo we'll talk about later. 
+     
+  3. **Start the backend server**
+
+     ```bash
+     npm start
+     ```
+
+     You should see output like this:
+     ```
+     ✓ Mode: DIRECT
+     ✓ Exporting to: https://your-org.ingest.us.sentry.io/...
+     ✓ OpenTelemetry instrumentation initialized
+     ✓ Redis connected
+     ✓ OpenTelemetry E-commerce API Server
+     ✓ Server listening on port 3000
+     ```
+</Steps>
+
+## What's Happening Behind the Scenes
+
+The backend is already configured with OpenTelemetry instrumentation (in `api/instrument-otel.js`). Here's what's happening:
+
+### 1. OTLP Exporters Configuration
+
+The environment variables you set in `.env` are loaded and used to create OTLP exporters that send data to Sentry:
+
+```javascript
+// From api/instrument-otel.js
+
+// Direct mode: App sends directly to Sentry (single project)
+// Headers are automatically parsed by the OTEL SDK from OTEL_EXPORTER_OTLP_TRACES_HEADERS env var
+const traceExporter = new OTLPTraceExporter({
+  url: process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+});
+
+const logExporter = new OTLPLogExporter({
+  url: process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
+});
+```
+
+These exporters are then configured in the NodeSDK to send all telemetry data to your Sentry project:
+
+```javascript
+// From api/instrument-otel.js
+
+// Initialize OpenTelemetry SDK
+const sdk = new NodeSDK({
+  resource,
+  traceExporter,  // Uses the Sentry traces endpoint
+  logRecordProcessors: [new BatchLogRecordProcessor(logExporter)],  // Uses the Sentry logs endpoint
+  instrumentations: [
+    getNodeAutoInstrumentations({
+      '@opentelemetry/instrumentation-http': { enabled: true },
+      '@opentelemetry/instrumentation-express': { enabled: true },
+      '@opentelemetry/instrumentation-pg': { enabled: true },
+      '@opentelemetry/instrumentation-redis-4': { enabled: true },
+    }),
+  ],
+});
+
+sdk.start();
+```
+
+Once the SDK starts, all instrumented operations (HTTP requests, database queries, etc.) will automatically send their trace and log data to your Sentry project!
+
+### 2. Automatic Instrumentation
+
+OpenTelemetry automatically captures:
+- **HTTP** (`instrumentation-http`): Incoming requests to your API AND outgoing HTTP calls (like the payment gateway)
+- **Express** (`instrumentation-express`): Route handlers and middleware
+- **PostgreSQL** (`instrumentation-pg`): Database queries with query text and duration
+- **Redis** (`instrumentation-redis-4`): Cache get/set operations
+
+
+### 3. Manual Instrumentation
+
+The application also includes custom spans for business logic:
+
+```javascript
+// Example from api/src/services/payment.js
+import { withSpan } from '../utils/tracer.js';
+
+async function processPayment(orderId, amount) {
+  return withSpan('payment.process', async (span) => {
+    span.setAttribute('order.id', orderId);
+    span.setAttribute('payment.amount', amount);
+
+    // Simulate payment processing
+    const success = Math.random() > 0.1; // 90% success rate
+
+    if (!success) {
+      span.addEvent('payment-failed');
+      throw new Error('Payment declined');
+    }
+
+    return { success: true, transactionId: 'tx_' + Date.now() };
+  });
+}
+```
+
+These custom spans give you business-specific context in your traces.
+
+### 4. Resource Attributes
+
+Every span includes resource attributes that identify your service:
+
+```javascript
+{
+  "service.name": "otel-ecommerce-api",
+  "service.version": "1.0.0",
+  "deployment.environment": "development"
+}
+```
+
+These help you filter and organize traces in Sentry, especially when you have multiple services.
+
+## Testing the Direct Integration
+
+Now that you understand how the backend is configured for direct mode, let's verify it's sending data to Sentry.
+
+<Steps>
+  1. **Generate some traffic**
+
+     ```bash
+     # Open a new terminal window (keep the backend server running in the other terminal)
+     
+     # Simple health check
+     curl http://localhost:3000/health
+
+     # Fetch products (triggers database and cache operations)
+     curl http://localhost:3000/api/products
+
+     # Or run the load test to generate realistic traffic
+     npm test
+     ```
+
+     The load test will generate ~40 traces with various scenarios:
+     - Product fetching (cache hits and misses)
+     - Order creation
+     - Payment processing (including failures)
+     - Inventory checks
+
+  2. **Verify data in Sentry**
+
+     1. Go to your Sentry project
+     2. Navigate to **Explore** › **Traces**
+     3. You should see traces appearing from your API!
+
+     Look for traces with operations like:
+     - `GET /api/products`
+     - `POST /api/orders`
+     - Database queries (PostgreSQL)
+     - Cache operations (Redis)
+</Steps>
+
+## What to Look For in Sentry
+
+Once you've generated some traffic, here's what you should see in Sentry:
+
+### Traces Tab
+
+Navigate to **Explore** › **Traces** and you'll see the **Span Samples** tab displaying:
+- **Span Name**: The operation type (e.g., `GET`, `cache.get`, `pg-pool.connect`)
+- **Span Description**: Full operation details (e.g., `GET /api/products`)
+- **Span Duration**: How long each operation took
+- **Transaction**: Parent transaction (may show "(no value)" for standalone spans)
+- **Timestamp**: When the span occurred
+
+### Trace Details
+
+Click on any span in the **Span Samples** tab to open the trace waterfall view, where you'll see:
+- **Waterfall view** (left): Visual timeline showing the hierarchy of spans with their durations
+- **Span Details panel** (right): Opens when you click on a span, showing:
+  - **Span ID**: Unique identifier for the span
+  - **Span attributes**: category, description, duration, name, op (operation), self_time, status
+  - **Context data**: Browser info, device details, client_sample_rate
+  - **Custom attributes**: Any business data you've added to spans
+
+Learn more about the [Trace Explorer](https://docs.sentry.io/product/explore/trace-explorer/) view in the Sentry documentation.
+
+## What's Next?
+
+Now that you've successfully configured the direct OTEL SDK-to-Sentry integration, you have a few options:
+
+1. **Continue with Direct Mode**: Move on to connecting your frontend and backend for distributed tracing
+2. **Use the OpenTelemetry Collector**: Learn how to route telemetry through a collector for more control and flexibility
