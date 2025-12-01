@@ -9,10 +9,6 @@ import sentry from '@sentry/astro';
 export default defineConfig({
   integrations: [starlight({
     title: 'OpenTelemetry with Sentry Workshop',
-    logo: {
-      src: './src/assets/placeholder.svg',
-      replacesTitle: true,
-    },
     components: {
       // Use our custom logo component
       SiteTitle: './src/components/SentryLogo.astro',

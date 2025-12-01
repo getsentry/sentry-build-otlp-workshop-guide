@@ -225,6 +225,31 @@ service:
       exporters: [otlphttp/orders-logs]
 ```
 
+## What to Look For in Sentry
+
+Once you've generated some traffic, here's what you should see in Sentry:
+
+### Traces Tab
+
+Navigate to **Explore** › **Traces** and you'll see the **Span Samples** tab displaying:
+- **Span Name**: The operation type (e.g., `GET`, `cache.get`, `pg-pool.connect`)
+- **Span Description**: Full operation details (e.g., `GET /api/products`)
+- **Span Duration**: How long each operation took
+- **Transaction**: Parent transaction (may show "(no value)" for standalone spans)
+- **Timestamp**: When the span occurred
+
+### Trace Details
+
+Click on any span in the **Span Samples** tab to open the trace waterfall view, where you'll see:
+- **Waterfall view** (left): Visual timeline showing the hierarchy of spans with their durations
+- **Span Details panel** (right): Opens when you click on a span, showing:
+  - **Span ID**: Unique identifier for the span
+  - **Span attributes**: category, description, duration, name, op (operation), self_time, status
+  - **Context data**: Browser info, device details, client_sample_rate
+  - **Custom attributes**: Any business data you've added to spans
+
+Learn more about the [Trace Explorer](https://docs.sentry.io/product/explore/trace-explorer/) view in the Sentry documentation.
+
 ## What's Next?
 
 **Configure distributed tracing**: Enable `propagateTraceparent` to connect frontend and backend traces across projects
