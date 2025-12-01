@@ -55,7 +55,10 @@ Distributed tracing is built on three key concepts:
 
 <ScaledImage src="/assets/img/diagram-transaction-trace.png" alt="Sentry Trace" />
 
-### Traces
+<details>
+<summary><strong style="font-size: 1.1em; cursor: pointer;">Understanding Traces and Spans</strong></summary>
+
+#### Traces
 
 A **trace** represents the entire journey of a request through your system. For example, when a user clicks "Place Order" in your e-commerce app, a trace captures everything that happens:
 - The page load in the browser
@@ -70,7 +73,7 @@ Each trace has a unique **Trace ID** that connects all related operations across
 Think of a **Trace ID** like a GUID (Globally Unique Identifier) - it uniquely identifies the entire request journey. Because it's globally unique, the same Trace ID can carry through to other systems, environments, or third-party services, allowing you to track a request across your entire architecture.
 :::
 
-### Spans
+#### Spans
 
 A **span** represents a single operation within a trace. Spans show you the details of what's happening. Examples include:
 - **HTTP requests**: Calling an external API
@@ -79,6 +82,8 @@ A **span** represents a single operation within a trace. Spans show you the deta
 - **Business logic**: Custom operations like "processing payment" or "checking inventory"
 
 Spans can have parent-child relationships, creating a tree structure that shows which operations triggered which.
+
+</details>
 
 ## How Sentry Connects Traces: HTTP Headers
 
@@ -132,5 +137,3 @@ This is what creates the unified view in Sentry where you can see the complete j
 4. **Trace ID** = The unique identifier that connects operations across services
 5. **Unified View** = Same Trace ID across frontend and backend means one trace in Sentry
 :::
-
-In the next section, we'll configure your backend to send traces to Sentry using OpenTelemetry.

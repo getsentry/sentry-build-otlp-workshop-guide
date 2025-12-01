@@ -1,17 +1,19 @@
 ---
-title: Connect Frontend to Backend Tracing
+title: Connecting Frontend to Backend for Distributed Tracing
 description: Enable distributed tracing between your React frontend and OpenTelemetry backend
 ---
 
-import { Steps } from '@astrojs/starlight/components';
+import { Steps, Aside } from '@astrojs/starlight/components';
 
 Review how [trace propagation works](/distributed-tracing#how-sentry-connects-traces-http-headers)
 
+This is the use case we discussed earlier where we incorporate distributed tracing between the frontend and backend, in our case a Sentry Frontend + OTEL Backend. We will be using the `propagateTraceparent` configuration in our Sentry SDK to enable this.
+
 ### `propagateTraceparent`
 
-When enabled, Sentry's SDK sends **all three headers**:
-
 The `traceparent` header contains the same information (Trace ID, Parent Span ID, flags), just in a standardized format that OpenTelemetry can read.
+
+When enabled, Sentry's SDK sends **all three headers**:
 
 ```javascript
 fetch('http://localhost:3000/api/orders', {
@@ -35,10 +37,17 @@ The result is a unified trace that flows from browser → React → API → Data
 
 Before connecting the frontend, you'll need a Sentry project to send data to. If you already have a project set up, you can skip to the next section.
 
+:::tip
+Using separate projects allows you to:
+- Set different alert rules for frontend vs backend issues
+- Filter traces by project in the Explore > Traces view
+- Track error budgets and performance metrics separately
+:::
+
 <Steps>
   1. **Create a new Sentry project**
 
-     1. Log in to [sentry.io](https://sentry.io) (or your self-hosted Sentry instance)
+     1. Log in to [sentry.io](https://sentry.io)
      2. Navigate to **Projects** in the main navigation
      3. Click **Create Project** in the top right
      4. Select **React** as the platform (for the frontend)
@@ -51,32 +60,38 @@ Before connecting the frontend, you'll need a Sentry project to send data to. If
 
      After creating the project, Sentry will show you the DSN (Data Source Name). This is the URL that tells the Sentry SDK where to send data. You can always find it later in: **Settings** > **Projects** > [Your Project] > **Client Keys (DSN)**
 
-     :::tip
-     Using separate projects allows you to:
-     - Set different alert rules for frontend vs backend issues
-     - Filter traces by project in the Explore > Traces view
-     - Track error budgets and performance metrics separately
-     :::
+  3. Upload sourcemaps to Sentry (recommended)
+
+     Sourcemaps are used to map compiled code back to the original source files, allowing Sentry to show you the correct line of code in the error stack trace.
+
+     ```bash
+     npx @sentry/wizard@latest -i sourcemaps
+     ```
 </Steps>
 
 ## Configuring the Frontend
 
 Now that you have a Sentry project and DSN, let's configure the React frontend.
 
+<Aside type="caution" title="Switch Back to Direct Mode">
+If you're still running the backend in collector mode from the previous lesson, stop it now and switch back to direct mode:
+
+```bash
+# Stop the collector mode (Ctrl+C in the terminal running it)
+# Then start direct mode:
+npm run demo:direct
+```
+</Aside>
+
 <Steps>
   1. **Add your Sentry DSN to environment variables**
 
-     The frontend is already set up - just add your DSN to the `.env` file:
-
-     ```bash
-     cd frontend
-     # Edit .env
-     ```
+     The frontend is already set up - just add your DSN to the `frontend/.env` file:
 
      Add your Sentry DSN:
      ```bash
      VITE_API_URL=http://localhost:3000/api
-     VITE_SENTRY_DSN=https://YOUR_PUBLIC_KEY@YOUR_ORG.ingest.us.sentry.io/YOUR_PROJECT_ID
+     VITE_SENTRY_DSN=<paste React project DSN>
      ```
 
   2. **Verify the Sentry configuration**
@@ -115,7 +130,7 @@ Now that you have a Sentry project and DSN, let's configure the React frontend.
   3. **Start the frontend**
 
      ```bash
-     npm run dev
+     npm run dev:frontend
      ```
 
      The frontend will be available at `http://localhost:5173` (or `5174` if 5173 is taken)
@@ -169,13 +184,3 @@ Now that you have a Sentry project and DSN, let's configure the React frontend.
 
 ### Connected Spans
 All spans with the same Trace ID are grouped together in one view!
-
-## What's Next?
-
-Now that you have distributed tracing working, you can:
-1. Understand what the traces mean and how to read them
-2. Debug common setup issues
-3. Investigate real performance problems
-4. Use traces to understand production errors
-
-In the next modules, we'll put this to use by debugging actual issues in the e-commerce application!

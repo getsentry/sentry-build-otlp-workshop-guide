@@ -33,7 +33,7 @@ Sentry provides the exporter configuration directly in the UI:
 
 Here's an example collector configuration for a **single Sentry project**, using the exporter configuration from Sentry's UI:
 
-```yaml
+```yaml title="collector-config.yaml"
 receivers:
   otlp:
     protocols:
@@ -74,33 +74,6 @@ service:
 While Sentry provides explicit `logs_endpoint` and `traces_endpoint` paths, you can also use a single base endpoint (`endpoint: https://your-org.ingest.us.sentry.io/api/PROJECT_ID/integration/otlp`). The collector will automatically append `/v1/logs` or `/v1/traces` based on the signal type. We'll continue using the explicit paths for clarity in this workshop.
 </Aside>
 
-{/* ### 3. Run the Workshop Application
-
-<Aside type="note">
-The workshop application includes a pre-configured collector setup and built-in scripts. For production deployments or other applications, you can download the [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/getting-started/) and run it using Docker or as a standalone binary.
-</Aside>
-
-<Steps>
-  1. **Switch to collector mode and start the collector**
-     ```bash
-     npm run mode:collector
-     npm run collector:start
-     ```
-     This configures the application to send telemetry to the local Collector (localhost:4318) instead of directly to Sentry.
-
-  2. **Start the application** in a separate terminal
-     ```bash
-     npm start
-     ```
-     The Collector forwards traces and logs to Sentry with proper authentication.
-
-  3. **Generate traffic** - Open [http://localhost:5173](http://localhost:5173) and browse the e-commerce app
-
-  4. **Verify in Sentry** - Navigate to **Explore** › **Traces** to see your data
-
-  5. **Monitor Collector logs** to verify data is being received and exported
-</Steps> */}
-
 ## Routing to Multiple Sentry Projects
 
 <Aside type="caution" title="Current Limitation">
@@ -109,28 +82,46 @@ The workshop application includes a pre-configured collector setup and built-in 
 **Solution**: Use multiple exporters with the OpenTelemetry Collector's [routing connector](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/routingconnector#routing-connector) to route telemetry data to different Sentry projects based on service attributes.
 </Aside>
 
+Let's set up two separate Node.js Sentry projects to send telemetry to:
+- `otel-products-service`
+- `otel-orders-service`
 
 ### Routing by Service Name
 
-After you've set up your different Sentry projects, you can configure the Collector to route data to them based on service name. This example uses environment variables for better security and easier configuration management.
+After you've set up your different Sentry projects, you can configure the Collector to route data to them based on service name. This uses the OTEL Collector's [routing connector](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/connector/routingconnector/README.md).
 
-First, set up your environment variables for each Sentry project:
+This example uses environment variables for better security and easier configuration management. First, set up your environment variables for each Sentry project:
 
 ```bash
 # Products Service - Sentry OTLP Endpoints & Auth (paste from Sentry UI)
 SENTRY_PRODUCTS_TRACES_ENDPOINT=<paste OTLP Traces Endpoint>
 SENTRY_PRODUCTS_LOGS_ENDPOINT=<paste OTLP Logs Endpoint>
-SENTRY_PRODUCTS_AUTH=<paste OTLP Traces Endpoint Header>
+
+# When copying auth from Sentry settings, paste the part AFTER "x-sentry-auth="
+# Example: if Sentry shows "x-sentry-auth=sentry sentry_key=ABC", paste "sentry sentry_key=ABC"
+SENTRY_PRODUCTS_AUTH=<paste the value after x-sentry-auth=>
 
 # Orders Service - Sentry OTLP Endpoints & Auth (paste from Sentry UI)
 SENTRY_ORDERS_TRACES_ENDPOINT=<paste OTLP Traces Endpoint>
 SENTRY_ORDERS_LOGS_ENDPOINT=<paste OTLP Logs Endpoint>
-SENTRY_ORDERS_AUTH=<paste OTLP Traces Endpoint Header>
+
+# When copying auth from Sentry settings, paste the part AFTER "x-sentry-auth="
+SENTRY_ORDERS_AUTH=<paste the value after x-sentry-auth=>
 ```
 
-Then configure the collector to use these environment variables:
+Then create `.api/collector-config.yaml` to the application and configure the collector to use these environment variables:
 
-```yaml
+This configuration sets up a **routing-based pipeline** that directs telemetry to different Sentry projects based on the `service.name` resource attribute. Here's how it works:
+
+1. **Receivers** accept incoming OTLP data over gRPC (port 4317) and HTTP (port 4318)
+2. **Routing Connectors** inspect each trace/log and route it to the appropriate pipeline based on which service generated it
+3. **Exporters** send the routed data to the correct Sentry project using the corresponding DSN credentials
+4. **Pipelines** wire everything together: primary pipelines receive and route, while service-specific pipelines export to their designated Sentry projects
+
+```yaml title="collector-config.yaml"
+# OpenTelemetry Collector Configuration - Multi-Project Routing
+# Routes telemetry to separate Sentry projects based on service.name
+
 receivers:
   otlp:
     protocols:
@@ -141,27 +132,27 @@ receivers:
 
 connectors:
   routing/traces:
-    default_pipelines: [traces/orders]
+    default_pipelines: [traces/orders]  # Gateway and other services go here
     error_mode: ignore
     table:
       # Products Service
-      - statement: route() where attributes["service.name"] == "products-service"
+      - statement: route() where resource.attributes["service.name"] == "products-service"
         pipelines: [traces/products]
 
       # Orders Service
-      - statement: route() where attributes["service.name"] == "orders-service"
+      - statement: route() where resource.attributes["service.name"] == "orders-service"
         pipelines: [traces/orders]
 
   routing/logs:
-    default_pipelines: [logs/orders]
+    default_pipelines: [logs/orders]  # Gateway and other services go here
     error_mode: ignore
     table:
       # Products Service
-      - statement: route() where attributes["service.name"] == "products-service"
+      - statement: route() where resource.attributes["service.name"] == "products-service"
         pipelines: [logs/products]
 
       # Orders Service
-      - statement: route() where attributes["service.name"] == "orders-service"
+      - statement: route() where resource.attributes["service.name"] == "orders-service"
         pipelines: [logs/orders]
 
 exporters:
@@ -196,6 +187,9 @@ exporters:
     encoding: proto
 
 service:
+  telemetry:
+    logs:
+      level: info
   pipelines:
     # Primary pipelines - receive and route
     traces:
@@ -224,6 +218,39 @@ service:
       receivers: [routing/logs]
       exporters: [otlphttp/orders-logs]
 ```
+
+### Running the Collector with Routing
+
+Now let's test the collector configuration and verify data is being routed to the correct Sentry projects:
+
+*Stop the server running in direct mode if it's still running.
+
+<Steps>
+  1. **Start the collector in routing mode**
+
+     ```bash
+     npm run demo:collector
+     ```
+
+     This starts the OpenTelemetry Collector with the routing configuration and configures the application to send telemetry to the local collector (localhost:4318).
+
+  2. **Generate traffic**
+
+     Use the app via the browser or run the load test to generate traffic
+
+     -OR-
+
+     In a new terminal, run the load test:
+
+     ```bash
+     npm run test:api
+     ```
+
+     The load test will generate traces with different service names:
+     - `products-service` - Product fetching and cache operations
+     - `orders-service` - Order creation and payment processing
+
+</Steps>
 
 ## What to Look For in Sentry
 

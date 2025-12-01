@@ -7,15 +7,15 @@ import { Steps, Card, CardGrid } from '@astrojs/starlight/components';
 import ScaledImage from '../../components/ScaledImage.astro';
 
 There are multiple ways to send OTLP data to Sentry:
-- **Direct SDK → Sentry** (this guide) - Simplest setup, SDK sends directly to Sentry
-- **SDK → OpenTelemetry Collector → Sentry** - More control, can process/filter data
-- **Vercel/Cloudflare Drains → Sentry** - No SDK needed, platform forwards telemetry
+- **Direct OTEL SDK → Sentry** (this guide) - Simplest setup, SDK sends directly to Sentry
+- **OTEL SDK → OpenTelemetry Collector → Sentry** - More control, can process/filter data
+- **Platform Drains → Sentry** - No SDK needed, cloud platforms automatically forward logs and traces (Vercel, Cloudflare, etc.)
 
 We'll start with the direct approach since it's the fastest way to get data flowing.
 
 ## Getting Your Sentry OTLP Credentials
 
-Sentry provides all the OTLP configuration you need directly in the UI - no need to construct URLs manually!
+Sentry provides all the OTLP configuration you need directly in the UI
 
 <Steps>
   1. **Open your Sentry project**
@@ -25,72 +25,59 @@ Sentry provides all the OTLP configuration you need directly in the UI - no need
      Go to **Settings** > **Projects** > [Your Project] > **Client Keys (DSN)**
 
   3. **Click the OpenTelemetry (OTLP) tab**
-
-     You'll see several pre-configured values ready to copy:
-
-  4. **Copy the following values** (click the copy icon next to each):
-     - **OTLP Traces Endpoint** - The full URL for sending traces
-     - **OTLP Traces Endpoint Headers** - The authentication header for traces
+     
+     **Copy the following values** (click the copy icon next to each):
      - **OTLP Logs Endpoint** - The full URL for sending logs
      - **OTLP Logs Endpoint Headers** - The authentication header for logs
+     - **OTLP Traces Endpoint** - The full URL for sending traces
+     - **OTLP Traces Endpoint Headers** - The authentication header for traces
 
      :::tip[Pro Tip]
-     All endpoints and headers are pre-configured with your organization, project ID, and authentication key. Just copy and paste them into your `.env` file!
+     All endpoints and headers are pre-configured with your organization, project ID, and authentication key. Just copy and paste them into your `.env` file
      :::
 </Steps>
 
 <ScaledImage src="/assets/img/otel_endpoints_sentry.gif" alt="Sentry OTLP Endpoints" size={100} />
 
-## Configuring Direct Mode
+## Configuring SDK Direct Mode
 
 Now let's configure the backend API to send data directly to Sentry's OTLP endpoints.
 
 <Steps>
-  1. **Open the backend .env file**
-
-     Navigate to the `api/` directory and open the `.env` file you created earlier:
+  1. **Add your Sentry OTLP configuration to the `api/.env` file**
 
      ```bash
-     cd api
-     # Open .env in your editor
-     ```
-
-  2. **Add your Sentry OTLP configuration**
-
-     Update the following environment variables in `.env`:
-
-     ```bash
-     # Sentry OTLP Traces Endpoint & Auth Header (paste from Sentry UI)
-     OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=<paste OTLP Traces Endpoint>
-     OTEL_EXPORTER_OTLP_TRACES_HEADERS=<paste OTLP Traces Endpoint Header>
-
      # Sentry OTLP Logs Endpoint & Auth Header (paste from Sentry UI)
      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=<paste OTLP Logs Endpoint>
      OTEL_EXPORTER_OTLP_LOGS_HEADERS=<paste OTLP Logs Endpoint Header>
+     
+     # Sentry OTLP Traces Endpoint & Auth Header (paste from Sentry UI)
+     OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=<paste OTLP Traces Endpoint>
+     OTEL_EXPORTER_OTLP_TRACES_HEADERS=<paste OTLP Traces Endpoint Header>
      ```
 
      Note: leave off the quotes around the headers values. This is nuance for this demo we'll talk about later. 
      
-  3. **Start the backend server**
+  3. **Restart (if running from earlier) the backend server in direct mode**
 
      ```bash
-     npm start
+     npm run demo:direct
      ```
 
      You should see output like this:
      ```
-     ✓ Mode: DIRECT
-     ✓ Exporting to: https://your-org.ingest.us.sentry.io/...
-     ✓ OpenTelemetry instrumentation initialized
-     ✓ Redis connected
-     ✓ OpenTelemetry E-commerce API Server
-     ✓ Server listening on port 3000
+     📡 Mode: DIRECT (SDK → Sentry)
+     📡 Exporting to: https://o4509013641854976.ingest.us.sentry.io/api/...
+     🔭 OpenTelemetry instrumentation initialized
+     📊 Service: sentry-build-otlp-workshop-api
+     ... more output ...
+     ✅ All services initialized successfully
      ```
 </Steps>
 
 ## What's Happening Behind the Scenes
 
-The backend is already configured with OpenTelemetry instrumentation (in `api/instrument-otel.js`). Here's what's happening:
+The application's backend is already configured with OpenTelemetry instrumentation (in `api/instrument-otel.js`). Here's what's happening:
 
 ### 1. OTLP Exporters Configuration
 
@@ -100,7 +87,7 @@ The environment variables you set in `.env` are loaded and used to create OTLP e
 // From api/instrument-otel.js
 
 // Direct mode: App sends directly to Sentry (single project)
-// Headers are automatically parsed by the OTEL SDK from OTEL_EXPORTER_OTLP_TRACES_HEADERS env var
+// Headers are automatically parsed from OTEL_EXPORTER_OTLP_TRACES_HEADERS env var by the exporter
 const traceExporter = new OTLPTraceExporter({
   url: process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
 });
@@ -110,7 +97,7 @@ const logExporter = new OTLPLogExporter({
 });
 ```
 
-These exporters are then configured in the NodeSDK to send all telemetry data to your Sentry project:
+Both the trace exporter and log exporter are configured in the NodeSDK:
 
 ```javascript
 // From api/instrument-otel.js
@@ -118,14 +105,27 @@ These exporters are then configured in the NodeSDK to send all telemetry data to
 // Initialize OpenTelemetry SDK
 const sdk = new NodeSDK({
   resource,
-  traceExporter,  // Uses the Sentry traces endpoint
-  logRecordProcessors: [new BatchLogRecordProcessor(logExporter)],  // Uses the Sentry logs endpoint
+  traceExporter,
+  logRecordProcessors: [new BatchLogRecordProcessor(logExporter)],
   instrumentations: [
     getNodeAutoInstrumentations({
-      '@opentelemetry/instrumentation-http': { enabled: true },
-      '@opentelemetry/instrumentation-express': { enabled: true },
-      '@opentelemetry/instrumentation-pg': { enabled: true },
-      '@opentelemetry/instrumentation-redis-4': { enabled: true },
+      '@opentelemetry/instrumentation-fs': {
+        enabled: false,
+      },
+      '@opentelemetry/instrumentation-http': {
+        enabled: true,
+        ignoreIncomingPaths: ['/health'],
+      },
+      '@opentelemetry/instrumentation-express': {
+        enabled: true,
+      },
+      '@opentelemetry/instrumentation-pg': {
+        enabled: true,
+        enhancedDatabaseReporting: true,
+      },
+      '@opentelemetry/instrumentation-redis-4': {
+        enabled: true,
+      },
     }),
   ],
 });
@@ -138,11 +138,12 @@ Once the SDK starts, all instrumented operations (HTTP requests, database querie
 ### 2. Automatic Instrumentation
 
 OpenTelemetry automatically captures:
-- **HTTP** (`instrumentation-http`): Incoming requests to your API AND outgoing HTTP calls (like the payment gateway)
+- **HTTP** (`instrumentation-http`): Incoming requests to your API AND outgoing HTTP calls (like the payment gateway). Health checks and CORS preflight requests are ignored to reduce noise.
 - **Express** (`instrumentation-express`): Route handlers and middleware
-- **PostgreSQL** (`instrumentation-pg`): Database queries with query text and duration
+- **PostgreSQL** (`instrumentation-pg`): Database queries with query text and duration (enhanced reporting enabled)
 - **Redis** (`instrumentation-redis-4`): Cache get/set operations
 
+Note: File system instrumentation is disabled by default as it generates too much noise.
 
 ### 3. Manual Instrumentation
 
@@ -203,7 +204,7 @@ Now that you understand how the backend is configured for direct mode, let's ver
      curl http://localhost:3000/api/products
 
      # Or run the load test to generate realistic traffic
-     npm test
+     npm run test:api
      ```
 
      The load test will generate ~40 traces with various scenarios:
@@ -249,10 +250,3 @@ Click on any span in the **Span Samples** tab to open the trace waterfall view, 
   - **Custom attributes**: Any business data you've added to spans
 
 Learn more about the [Trace Explorer](https://docs.sentry.io/product/explore/trace-explorer/) view in the Sentry documentation.
-
-## What's Next?
-
-Now that you've successfully configured the direct OTEL SDK-to-Sentry integration, you have a few options:
-
-1. **Continue with Direct Mode**: Move on to connecting your frontend and backend for distributed tracing
-2. **Use the OpenTelemetry Collector**: Learn how to route telemetry through a collector for more control and flexibility

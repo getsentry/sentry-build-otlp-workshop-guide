@@ -25,7 +25,6 @@ export default defineConfig({
         label: 'Workshop',
         items: [
           { label: 'Quickstart', slug: 'quickstart' },
-          { label: 'Workshop Overview', slug: 'workshop-overview' },
           {
             label: 'Distributed Tracing in Sentry',
             slug: 'distributed-tracing'
@@ -86,8 +85,12 @@ export default defineConfig({
           { label: 'Sentry Documentation', link: 'https://docs.sentry.io/' },
           { label: 'Sentry OTLP Documentation', link: 'https://docs.sentry.io/concepts/otlp/' },
           {
-            label: 'Trace Explorer',
+            label: 'Sentry Trace Explorer',
             link: 'https://docs.sentry.io/product/explore/trace-explorer/',
+          },
+          {
+            label: 'Sentry Log and Trace Drains',
+            link: 'https://docs.sentry.io/product/drains/',
           },
         ],
       },

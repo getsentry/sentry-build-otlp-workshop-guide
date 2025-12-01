@@ -4,30 +4,61 @@ description: Configure external services to send logs and traces to Sentry via O
 ---
 
 import { Steps, Aside } from '@astrojs/starlight/components';
+import ScaledImage from '../../components/ScaledImage.astro';
 
 ## What are Drains?
 
-Drains forward telemetry data from external platforms to Sentry using the OpenTelemetry Protocol (OTLP). This gives you visibility into:
+Forward logs and traces from cloud platforms directly into Sentry **without modifying your application code**. 
 
-- **Runtime logs**: Application output from serverless functions, edge functions, etc.
-- **Build logs**: Output from build and deployment processes
-- **Static logs**: Logs from static asset serving
-- **Distributed traces**: Request flows across your services and infrastructure
-- **System logs**: Platform-level events and operations
+### Why Use Drains?
 
-**Important limitation**: Drains do not capture error events—use Sentry SDKs for error monitoring.
+Drains capture **platform-level telemetry** from your infrastructure and backend services:
 
-## Supported Platforms
+- **Build and deployment logs**: Track build processes, deployments, and CI/CD pipeline output
+- **Runtime platform logs**: Serverless function execution, edge function cold starts, platform errors
+- **Infrastructure traces**: Request flows through routing layers, CDN, and edge networks
+- **Backend service logs**: Authentication events, database operations, storage access, API calls
 
-- [Vercel](https://docs.sentry.io/product/drains/integration/vercel/)
-- [Cloudflare](https://docs.sentry.io/product/drains/integration/cloudflare/)
-- [Heroku](https://docs.sentry.io/product/drains/integration/heroku/)
-- [Supabase](https://docs.sentry.io/product/drains/integration/supabase/)
-- [Shopify Hydrogen](https://docs.sentry.io/product/drains/integration/shopify-hydrogen/)
+Once configured, your platform automatically forwards logs and traces to Sentry, where you can view and analyze them alongside data from your Sentry SDKs.
 
-## Get Your Sentry OTLP Endpoints
+**Note**: Drains do not capture error events. To capture application errors, use [Sentry SDKs](https://docs.sentry.io/platforms/) instead.
 
-Before configuring drains, you need your Sentry OTLP endpoints:
+<Aside type="tip">
+**In production**, you'll likely use a **combination** of these approaches:
+- Sentry SDKs for frontend error monitoring
+- OpenTelemetry SDK for backend tracing
+- Drains for platform-level infrastructure logs
+</Aside>
+
+## Two Types of Drains
+
+### Platform-Specific Drains
+Built-in integrations provided by hosting platforms to forward their own logs and traces:
+
+- [Vercel](https://docs.sentry.io/product/drains/integration/vercel/) - Runtime, build, and static logs + distributed traces
+- [Cloudflare](https://docs.sentry.io/product/drains/integration/cloudflare/) - Worker logs and traces
+- [Heroku](https://docs.sentry.io/product/drains/integration/heroku/) - Application logs and traces
+- [Supabase](https://docs.sentry.io/product/drains/integration/supabase/) - Edge function, auth, storage, and API logs
+- [Shopify Hydrogen](https://docs.sentry.io/product/drains/integration/shopify-hydrogen/) - Storefront traces
+
+**Setup**: Configure directly in your platform's dashboard using Sentry OTLP endpoints.
+
+### Generic Forwarders
+Telemetry pipeline tools you configure to collect and forward logs from any source:
+
+- [Vector](https://docs.sentry.io/product/drains/integration/vector/) - High-performance log aggregator
+- [OpenTelemetry Collector](https://docs.sentry.io/product/drains/integration/opentelemetry-collector/) - Vendor-neutral telemetry pipeline
+- [Fluent Bit](https://docs.sentry.io/product/drains/integration/fluentbit/) - Lightweight log processor
+
+**Setup**: Deploy the forwarder yourself, configure it to collect logs from your infrastructure, and send them to Sentry's OTLP endpoints.
+
+<Aside>
+**When to use forwarders**: Use generic forwarders when you're not on a supported platform, need to aggregate logs from multiple sources, or want more control over processing/filtering before sending to Sentry.
+</Aside>
+
+## Get Your Sentry Drain Endpoints
+
+Before configuring drains, you need your project's drain endpoints:
 
 <Steps>
   1. **Open your Sentry project**
@@ -36,28 +67,24 @@ Before configuring drains, you need your Sentry OTLP endpoints:
 
      Go to **Settings** > **Projects** > [Your Project] > **Client Keys (DSN)**
 
-  3. **Click the OpenTelemetry (OTLP) tab**
+  3. **Select the appropriate tab**
 
-  4. **Copy the following values**:
-     - **OTLP Logs Endpoint** - For forwarding logs
-     - **OTLP Traces Endpoint** - For forwarding traces
-     - **Authentication Headers** - Required for both logs and traces
+     - For most platforms: Click the **OpenTelemetry (OTLP)** tab
+     - For Vercel: Click the **Vercel Drains** tab (uses custom endpoints)
+
+  4. **Copy the required values**:
+     - Endpoint URL(s) for logs and/or traces
+     - Authentication headers (typically your public DSN key)
 </Steps>
-
-[add screenshot - project settings with otlp tab open]
 
 ## Example: Configuring Vercel Drains 
 
-Vercel drains forward logs and traces from your Vercel deployments to Sentry.
-
 ### Setting Up Log Drains
+1. From the Vercel dashboard, go to **Team Settings > Drains** and click **Add Drain**
+2. **Configure the drain** for projects, sources to forward and environments
+3. **Configure the destination** using your Sentry OTLP endpoints & headers
 
-[add screenshot - vercel drains settings page]
+<ScaledImage src="/assets/img/vercel_drain_settings.png" alt="Vercel Drains Settings" size={100} />
 
-## Configuration Tips
+For more detailed instructions, see the [Sentry Drains documentation](https://docs.sentry.io/product/drains/).
 
-- **Sampling rate**: Set to 100% to capture all telemetry (you can adjust later)
-- **Environment filtering**: Configure drains for specific environments (production, preview, etc.)
-- **Authentication**: Always include the `x-sentry-auth` header with your public DSN key
-- **Format**: Use protobuf encoding for better performance over JSON when available
-- **Compression**: Enable gzip compression to reduce bandwidth

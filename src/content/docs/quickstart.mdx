@@ -5,15 +5,14 @@ description: Get the OpenTelemetry E-commerce application running locally
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Work in Progress">
-This content is currently being updated and may be incomplete.
-</Aside>
-
 <Aside type="caution" title="Open Beta">
 This feature is currently in open beta. Please reach out to feedback-logging@sentry.io with any questions or feedback.
 </Aside>
 
-Follow this guide to get the OpenTelemetry E-commerce application running on your local machine. This is the application we'll use throughout the workshop to learn how to send OpenTelemetry data to Sentry.
+Follow this guide to get the OpenTelemetry E-commerce application running on your local machine. This is the application we'll use throughout the workshop to learn how to send OpenTelemetry data to Sentry. 
+
+The application is designed to move between different modes of sending OpenTelemetry data to Sentry. This is not common practice, it is a demo application to help demonstrate these concepts.
+For the sake of simplicity, commands have been abstracted to run at the root of the repository.
 
 ## Prerequisites
 
@@ -21,8 +20,7 @@ Before you begin, ensure you have the following:
 
 - [Git](https://git-scm.com/downloads)
 - [Node.js](https://nodejs.org/) (version 18 or higher)
-- [Free Sentry account](https://sentry.io/signup/)
-  - Create a **new Express project** in Sentry
+- [Free Sentry account](https://sentry.io/signup/) - Create a **new Node/Express project** in Sentry
 
 :::tip[About the Demo Application]
 This is a full-stack e-commerce application with:
@@ -44,36 +42,32 @@ We'll use this app to demonstrate how OpenTelemetry data flows into Sentry and h
      cd sentry-build-otlp-workshop
      ```
 
-  2. **Set up the Backend API**
+  2. **Install all dependencies**
 
-     Navigate to the API directory and install dependencies:
+     Install dependencies for both backend and frontend:
 
      ```bash
-     cd api
-     npm install
+     npm run install:all
      ```
 
-  3. **Create Neon Database**
+  3. **Configure Environment Variables**
+
+     Copy the environment files for both API and frontend:
+
+     ```bash
+     cp api/.env.example api/.env
+     cp frontend/.env.example frontend/.env
+     ```
+  
+  4. **Create Neon Database**
 
      Create a Neon PostgreSQL database with interactive setup:
 
      ```bash
-     npx neondb -y
+     npm run db:init
      ```
 
-     This will create a new Neon database and automatically configure your `DATABASE_URL` environment variable.
-
-  4. **Configure Environment Variables**
-
-     Copy the environment file:
-
-     ```bash
-     cp .env.example .env
-     ```
-
-     Edit the `.env` file to add:
-     - Your Neon `DATABASE_URL` (should be automatically set by `npx neondb`)
-     - Sentry OTLP endpoints (host and authentication token)
+     This will create a new Neon database and automatically configure your `DATABASE_URL` in `api/.env`.
 
      We'll configure the Sentry endpoints in detail in the next module.
 
@@ -87,37 +81,25 @@ We'll use this app to demonstrate how OpenTelemetry data flows into Sentry and h
 
      You should see:
      ```
+     🗄️  Setting up database schema...
      ✅ Schema created successfully
+     🌱 Seeding database with sample data...
      ✅ Database seeded successfully
      ✨ Database setup complete!
      ```
 
-  6. **Set up the Frontend**
+  6. **Start the Application**
 
-     Open a new terminal window, navigate to the frontend directory:
-
-     ```bash
-     cd ../frontend
-     npm install
-     cp .env.example .env
-     ```
-
-     We'll configure the Sentry SDK settings in the next module.
-
-  7. **Access the Application Project**
-
-     Start the backend API:
+     Start the backend API in direct mode:
 
      ```bash
-     # In the api directory
-     npm start
+     npm run demo:direct
      ```
 
      In a new terminal, start the frontend:
 
      ```bash
-     # In the frontend directory
-     npm run dev
+     npm run dev:frontend
      ```
 </Steps>
 
