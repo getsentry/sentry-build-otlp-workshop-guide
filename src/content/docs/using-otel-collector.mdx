@@ -109,7 +109,7 @@ SENTRY_ORDERS_LOGS_ENDPOINT=<paste OTLP Logs Endpoint>
 SENTRY_ORDERS_AUTH=<paste the value after x-sentry-auth=>
 ```
 
-Then create `.api/collector-config.yaml` to the application and configure the collector to use these environment variables:
+Then create `.api/collector-config.yaml` in the application and configure the collector to use these environment variables:
 
 This configuration sets up a **routing-based pipeline** that directs telemetry to different Sentry projects based on the `service.name` resource attribute. Here's how it works:
 

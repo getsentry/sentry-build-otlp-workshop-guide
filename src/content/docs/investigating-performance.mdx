@@ -29,64 +29,51 @@ Sentry's Trace Explorer allows you to search, filter, and analyze traces from yo
 
 ## Scenario 1: Identifying Slow Database Queries
 
-Your product search endpoint is occasionally slow. Let's use Trace Explorer to find the bottleneck.
+Your product search endpoint is occasionally slow. Let's use simple filter strategies to find slow queries.
 
-<Steps>
-1. **Navigate to Trace Explorer**
+### Basic Search Strategy
 
-   In your Sentry project, go to **Explore** > **Traces**
+Navigate to **Explore** > **Traces** and start with this filter to find slow database operations:
 
-2. **Filter for product search operations**
+```
+span.op is db
+span.duration > 200ms
+```
 
-   Use the search bar to filter spans:
+Sort by `span.duration` descending to see slowest first. Adjust the threshold (200ms, 500ms, 1s) based on your needs.
 
-   ```
-   span.op:db AND http.route:/api/products/search
-   ```
+### Quick Reference: Common Filter Patterns
 
-   This shows all database operations that occurred during product search requests.
+| Goal | Filter Query |
+|------|--------------|
+| Any slow DB query | `span.op is db` AND `span.duration > 500ms` |
+| Slow SELECTs | `span.op is db` AND `db.action is SELECT` AND `span.duration > 200ms` |
+| Slow on products table | `span.op is db` AND `db.collection.name is products` AND `span.duration > 100ms` |
+| Failed DB operations | `span.op is db` AND `span.status contains error` |
 
-3. **Add performance metrics**
+### Using the Aggregates Tab
 
-   Click **Add Series** and select:
-   - `p90(span.duration)` - Shows 90th percentile duration (outliers)
-   - `avg(span.duration)` - Shows average duration
+Click the **Aggregates** tab, then:
+1. Select a metric (e.g., `p95(span.duration)`, `avg(span.duration)`, or `count()`)
+2. Group by a field
 
-   The chart will reveal performance trends over time.
+**Group by `span.description`** to identify which specific queries are consistently slow.
 
-4. **View span samples**
+**Group by `db.collection.name`** to see which database tables have performance issues.
 
-   Switch to the **Span Samples** tab below the chart. Sort by **Duration** (click the column header) to see the slowest queries.
+### Pro Tips
 
-5. **Inspect a slow span**
+1. **Start with P95**: Look at 95th percentile duration, not just average
+2. **Check frequency**: A query that's 200ms but runs 1000x/min is worse than one that's 2s but runs 1x/hour
+3. **Check Starred Queries** list for quick access
+4. **Save your queries**: Click "Save as..." to create saved queries like "Slow DB Queries (>500ms)" for quick access
 
-   Click on a Span ID to open the **Trace Waterfall View**. You'll see:
-   - The complete request flow from frontend to database
-   - Exact timing for each operation
-   - Span attributes like `db.statement` showing the actual SQL query
+### Inspecting Slow Spans
 
-   **Example attributes you'll find:**
-   ```
-   span.op: db
-   db.system: postgresql
-   db.statement: SELECT ... WHERE name ILIKE '%laptop%' OR description ILIKE '%laptop%'
-   search.query: laptop
-   search.results_count: 15
-   ```
-
-6. **Aggregate by database table**
-
-   Switch to the **Aggregates** tab. Group by `db.table` to see which tables have the slowest queries:
-
-   - Group by: `db.table`
-   - Sort by: `p90(span.duration)`
-
-   Click the stack icon next to any aggregate to see sample traces.
-</Steps>
-
-<Aside>
-**What you learned**: The `ILIKE` operator on large text columns causes slow queries. Consider adding full-text search indexes or using a dedicated search service.
-</Aside>
+Click any Span ID to open the **Trace Waterfall View** where you'll see:
+- The complete request flow
+- Exact timing for each operation
+- Span attributes
 
 ---
 
@@ -100,14 +87,14 @@ Are your cache hits effective? Let's measure cache hit rates and their performan
    In Trace Explorer, search:
 
    ```
-   span.op:cache.get
+   span.op is cache.get
    ```
 
 2. **Create a hit rate calculation**
 
    Group by `cache.hit` in the Aggregates tab:
-   - `cache.hit:true` - Cache hits
-   - `cache.hit:false` - Cache misses
+   - `cache.hit IS True` - Cache hits
+   - `cache.hit IS False` - Cache misses
 
    Compare the count of each to calculate your hit rate.
 
@@ -117,13 +104,13 @@ Are your cache hits effective? Let's measure cache hit rates and their performan
 
    **Query 1 (Cache Hits):**
    ```
-   span.op:cache.get AND cache.hit:true
+   span.description is cache.get AND cache.hit IS True
    ```
    Add metric: `avg(span.duration)`
 
    **Query 2 (Cache Misses):**
    ```
-   span.op:cache.get AND cache.hit:false
+   span.description is cache.get AND cache.hit IS False
    ```
    Add metric: `avg(span.duration)`
 
@@ -133,24 +120,20 @@ Are your cache hits effective? Let's measure cache hit rates and their performan
 
    In Span Samples, filter for cache misses:
    ```
-   span.op:cache.get AND cache.hit:false
+   span.description is cache.get AND cache.hit IS False
    ```
 
    Look at the `cache.key` attribute to see which keys are missing most often.
 
 5. **View the full request flow**
 
-   Click a trace ID where `cache.hit:false`. In the waterfall, you'll see:
+   Click a trace ID where `cache.hit IS False`. In the waterfall, you'll see:
    - `cache.get` span (miss, ~2ms)
    - `db` span immediately after (query, ~150ms)
    - `cache.set` span (storing result, ~3ms)
 
    This shows the cache-aside pattern in action.
 </Steps>
-
-<Aside type="tip">
-**Pro tip**: If you see low cache hit rates on product lists, check the `cache.key` values. The app uses `products:all` for the full list and `product:{id}` for individual products. High miss rates might indicate your cache TTL is too short or you're clearing cache too frequently.
-</Aside>
 
 ---
 
@@ -162,12 +145,12 @@ Order creation involves multiple steps. Let's identify which step is the bottlen
 1. **Filter for order creation traces**
 
    ```
-   http.route:/api/orders AND http.method:POST
+   span.description is POST /api/orders
    ```
 
 2. **View the waterfall**
 
-   Click any Trace ID to open the waterfall view. You'll see a complete breakdown:
+   Click any Trace ID to open the waterfall view. You'll see a complete breakdown. Something like:
 
    ```
    └─ POST /api/orders (850ms)
@@ -190,26 +173,10 @@ Order creation involves multiple steps. Let's identify which step is the bottlen
    ```
 
 3. **Analyze the bottleneck**
+   
+   Look for the slowest single operation
 
-   The waterfall reveals:
-   - **Product validation** queries run sequentially (N+1 query problem)
-   - **Payment processing** is the slowest single operation
-   - **Database roundtrips** add up when ordering multiple items
-
-4. **Correlate with order size**
-
-   Use the search with span attributes:
-   ```
-   http.route:/api/orders AND order.items_count:>3
-   ```
-
-   Compare average duration for orders with different item counts:
-   - 1 item: ~450ms
-   - 3+ items: ~850ms
-
-   This confirms the N+1 query problem.
-
-5. **Examine span attributes**
+4. **Examine span attributes**
 
    In the waterfall, click any span to see attributes:
 
@@ -232,58 +199,6 @@ Order creation involves multiple steps. Let's identify which step is the bottlen
    ```
 </Steps>
 
-<Aside>
-**Optimization ideas**:
-- Batch product queries into a single `WHERE id IN (...)` statement
-- Consider async payment processing for non-critical paths
-- Add Redis caching for frequently ordered products
-</Aside>
-
----
-
-## Scenario 4: Database Connection Pool Analysis
-
-Are database connections becoming a bottleneck under load?
-
-<Steps>
-1. **Aggregate by database operation type**
-
-   In Aggregates tab:
-   - Group by: `db.operation`
-   - Metric: `p90(span.duration)`
-
-   You'll see aggregates for SELECT, INSERT, UPDATE operations.
-
-2. **Find long-running transactions**
-
-   Search for transactions that hold locks:
-   ```
-   db.transaction:true AND span.duration:>500ms
-   ```
-
-   Long-running transactions can cause connection pool exhaustion.
-
-3. **Create a duration trend chart**
-
-   Add series:
-   - `avg(span.duration)` where `span.op:db`
-
-   Look for spikes during high-traffic periods. If duration increases under load, you may need to increase connection pool size.
-
-4. **Compare transaction vs single queries**
-
-   **Query 1 (Transactions):**
-   ```
-   db.transaction:true
-   ```
-
-   **Query 2 (Single Queries):**
-   ```
-   span.op:db AND NOT db.transaction:true
-   ```
-
-   Transactions should be faster than the sum of individual queries (that's why we use them), but if they're slow, investigate lock contention.
-</Steps>
 
 ---
 
@@ -305,7 +220,7 @@ From any Trace Explorer query, click **Save As** > **Alert**. Configure the aler
 1. **Slow Order Creation**
 
    ```
-   Query: http.route:/api/orders AND http.method:POST
+   Query: span.description is POST /api/orders
    Metric: p95(span.duration)
    Threshold: > 1000ms
    ```
@@ -315,7 +230,7 @@ From any Trace Explorer query, click **Save As** > **Alert**. Configure the aler
 2. **Database Query Performance Degradation**
 
    ```
-   Query: span.op:db AND db.table:products
+   Query: span.op is db AND db.collection.name is products
    Metric: p90(span.duration)
    Threshold: > 200ms
    ```
@@ -325,8 +240,8 @@ From any Trace Explorer query, click **Save As** > **Alert**. Configure the aler
 3. **Cache Miss Rate**
 
    ```
-   Query: span.op:cache.get
-   Metric: count() where cache.hit:false
+   Query: span.description is cache.get AND cache.hit IS False
+   Metric: count() where cache.hit IS False
    Threshold: > 1000 per hour
    ```
 
@@ -335,7 +250,7 @@ From any Trace Explorer query, click **Save As** > **Alert**. Configure the aler
 4. **Payment Processing Latency**
 
    ```
-   Query: span.op:payment.process
+   Query: span.description is payment.process
    Metric: p95(span.duration)
    Threshold: > 500ms
    ```
@@ -345,7 +260,7 @@ From any Trace Explorer query, click **Save As** > **Alert**. Configure the aler
 5. **Transaction Duration**
 
    ```
-   Query: db.transaction:true
+   Query: db.transaction IS True
    Metric: p90(span.duration)
    Threshold: > 300ms
    ```
@@ -363,71 +278,46 @@ From any Trace Explorer query, click **Save As** > **Alert**. Configure the aler
 
 Dashboards give you at-a-glance visibility into application performance trends.
 
-### How to Create Dashboard Widgets
+### How to Create a Dashboard
 
-From any Trace Explorer query, click **Save As** > **Dashboard Widget**. Choose visualization type:
-- **Time Series**: Trends over time (latency, throughput)
-- **Big Number**: Current state (error rate, cache hit rate)
-- **Table**: Top N slowest operations
+1. Go to **Dashboards** and click **Create Dashboard**
+2. Give it a name (e.g., "Performance Monitoring")
+3. From any Trace Explorer query, click **Save As** > **Dashboard Widget**
+4. Choose the dashboard and select visualization type:
+   - **Time Series**: Trends over time (latency, throughput)
+   - **Big Number**: Current state (error rate, cache hit rate)
+   - **Table**: Top N slowest operations
 
 ### Essential Performance Dashboard Widgets
 
 #### 1. API Endpoint Latency Overview
 
 **Widget Type**: Time Series
-**Queries**: Create separate series for each critical endpoint
+
+**Queries**:
 
 ```
-Query 1: http.route:/api/products AND http.method:GET
+Query 1: span.description is GET /api/products
 Metric: p90(span.duration)
-Label: "Products List"
+Name: "Products List"
 
-Query 2: http.route:/api/orders AND http.method:POST
+Query 2: span.description is POST /api/orders
 Metric: p90(span.duration)
-Label: "Order Creation"
+Name: "Order Creation"
 
-Query 3: http.route:/api/products/search
+Query 3: span.description is GET /api/products/search
 Metric: p90(span.duration)
-Label: "Product Search"
+Name: "Product Search"
 ```
 
 **Why**: See all critical endpoints on one chart. Spot performance regressions after deployments.
 
-#### 2. Database Performance by Table
-
-**Widget Type**: Table
-**Configuration**:
-```
-Query: span.op:db
-Group By: db.table
-Metrics:
-  - p90(span.duration)
-  - count()
-Sort By: p90(span.duration) DESC
-```
-
-**Why**: Identify which tables are slowest and how frequently they're queried. Prioritize optimization efforts.
-
-#### 3. Cache Hit Rate
-
-**Widget Type**: Big Number
-**Calculation**:
-```
-Query 1 (Hits): span.op:cache.get AND cache.hit:true
-Metric: count()
-
-Query 2 (Total): span.op:cache.get
-Metric: count()
-
-Formula: (Hits / Total) × 100
-```
-
-**Why**: Monitor cache effectiveness at a glance. Should be > 80% for product queries.
-
-#### 4. Operation Type Breakdown
+#### 2. Operation Type Breakdown
 
 **Widget Type**: Time Series (stacked)
+
 **Configuration**:
+
 ```
 Query: span.op:*
 Group By: span.op
@@ -436,109 +326,9 @@ Metric: avg(span.duration)
 
 **Why**: See relative performance of HTTP requests, DB queries, cache operations, and external calls in one view.
 
-#### 5. Slowest Transactions
-
-**Widget Type**: Table
-**Configuration**:
-```
-Query: (none - show all traces)
-Columns:
-  - Trace ID
-  - http.route
-  - span.duration
-  - order.items_count (if available)
-Sort By: span.duration DESC
-Limit: 10
-```
-
-**Why**: Quickly identify the slowest recent transactions to investigate.
-
-#### 6. Database Operations Trend
-
-**Widget Type**: Time Series
-**Queries**: Separate series for operation types
-```
-Query 1: db.operation:SELECT
-Metric: count()
-
-Query 2: db.operation:INSERT
-Metric: count()
-
-Query 3: db.operation:UPDATE
-Metric: count()
-```
-
-**Why**: Understand your database load profile. Sudden spikes in INSERTs or UPDATEs may indicate issues.
-
-#### 7. Request Throughput
-
-**Widget Type**: Time Series
-**Configuration**:
-```
-Query: http.method:*
-Metric: count() per minute
-Group By: http.route
-```
-
-**Why**: Monitor traffic patterns. Helps correlate performance degradation with traffic spikes.
-
-#### 8. Cache vs Database Response Time
-
-**Widget Type**: Time Series
-**Queries**:
-```
-Query 1: cache.hit:true
-Metric: avg(span.duration)
-Label: "Cache Hit"
-
-Query 2: span.op:db
-Metric: avg(span.duration)
-Label: "Database"
-```
-
-**Why**: Visualize the performance benefit of caching. Database should be 50-100x slower than cache.
-
 <Aside type="note">
 **Dashboard Organization**: Create separate dashboards for:
 - **Executive View**: High-level metrics (error rate, P95 latency, throughput)
 - **Engineering View**: Detailed performance by operation, table, endpoint
 - **On-Call View**: Current alerts, recent errors, slowest transactions
-</Aside>
-
----
-
-## Understanding OTLP Span Attributes
-
-When using OpenTelemetry with OTLP, your traces include rich attributes you can search:
-
-**HTTP Attributes:**
-```
-http.method: GET, POST
-http.route: /api/products, /api/orders
-http.status_code: 200, 404, 500
-http.request.method: GET (newer semantic convention)
-```
-
-**Database Attributes:**
-```
-db.system: postgresql
-db.operation: SELECT, INSERT, UPDATE
-db.statement: SELECT * FROM products WHERE id = $1
-db.table: products, orders
-```
-
-**Custom Application Attributes:**
-```
-order.id: 42
-order.user_id: 1
-order.items_count: 3
-order.total_amount: 459.97
-payment.transaction_id: txn_123
-cache.key: products:all
-cache.hit: true/false
-search.query: laptop
-```
-
-<Aside type="note">
-**OTLP vs SDK**: With OTLP traces, you get full control over custom attributes but won't have automatic performance issue detection (like N+1 queries) that Sentry SDK provides. You'll need to identify patterns manually through queries and aggregations.
 </Aside>

@@ -1,4 +1,4 @@
-># OpenTelemetry with Sentry Workshop Guide
+> # OpenTelemetry with Sentry Workshop Guide
 
 This repository contains the documentation and guide for the **OpenTelemetry with Sentry** workshop, built using [Astro Starlight](https://starlight.astro.build).
 
@@ -7,6 +7,7 @@ This repository contains the documentation and guide for the **OpenTelemetry wit
 This comprehensive hands-on workshop teaches developers how to send OpenTelemetry traces and logs to Sentry for powerful observability. The workshop uses a real-world **full-stack e-commerce application** with Node.js backend and React frontend.
 
 Topics covered:
+
 - Configuring OpenTelemetry SDK to send data to Sentry via OTLP
 - Understanding distributed tracing (traces, transactions, spans)
 - Enabling trace propagation between frontend and backend
@@ -56,12 +57,12 @@ The documentation will be available at `http://localhost:4321`.
 
 All commands are run from the root of the project:
 
-| Command          | Action                                           |
-| :--------------- | :----------------------------------------------- |
-| `npm install`    | Installs dependencies                            |
-| `npm run dev`    | Starts local dev server at `localhost:4321`      |
-| `npm run build`  | Build your production site to `./dist/`          |
-| `npm run preview`| Preview your build locally, before deploying     |
+| Command           | Action                                       |
+| :---------------- | :------------------------------------------- |
+| `npm install`     | Installs dependencies                        |
+| `npm run dev`     | Starts local dev server at `localhost:4321`  |
+| `npm run build`   | Build your production site to `./dist/`      |
+| `npm run preview` | Preview your build locally, before deploying |
 
 ## Workshop Application
 
@@ -72,6 +73,7 @@ This workshop uses a separate demo application. The documentation guides you thr
 ## Workshop Technologies
 
 ### Demo Application Stack:
+
 - **Backend**: Node.js + Express with OpenTelemetry auto-instrumentation
 - **Frontend**: React with Sentry SDK
 - **Database**: PostgreSQL with automatic query tracing
@@ -81,6 +83,7 @@ This workshop uses a separate demo application. The documentation guides you thr
 - **Platform**: Sentry for visualization and debugging
 
 ### Documentation:
+
 - **Framework**: Astro Starlight
 - **Styling**: Custom CSS (Sentry branding)
 - **Components**: Starlight built-in components
@@ -97,22 +100,6 @@ After completing this workshop, you'll be able to:
 - Decide when to use direct mode vs collector mode
 - Apply vendor-neutral observability patterns to your own applications
 
-## Resources
-
-### OpenTelemetry
-- [OpenTelemetry Documentation](https://opentelemetry.io/docs/)
-- [OTel JavaScript SDK](https://opentelemetry.io/docs/instrumentation/js/)
-- [OTLP Specification](https://opentelemetry.io/docs/specs/otlp/)
-
-### Sentry
-- [Sentry OTLP Documentation](https://docs.sentry.io/concepts/otlp/)
-- [Distributed Tracing Concepts](https://docs.sentry.io/concepts/key-terms/tracing/distributed-tracing/)
-- [Trace Explorer](https://docs.sentry.io/product/explore/trace-explorer/)
-
-### Community
-- [OpenTelemetry Slack](https://cloud-native.slack.com/) - #opentelemetry channels
-- [Sentry Discord](https://discord.gg/sentry) - Get help and share experiences
-
 ## Contributing
 
 If you'd like to contribute to this workshop, feel free to open a pull request or file an issue:
@@ -127,7 +114,7 @@ This workshop uses several Astro Starlight components:
 
 ### Steps Component
 
-```markdown
+````markdown
 import { Steps } from '@astrojs/starlight/components';
 
 <Steps>
@@ -137,12 +124,12 @@ import { Steps } from '@astrojs/starlight/components';
      npm install @opentelemetry/sdk-node
      ```
 
-  2. **Configure OTLP endpoint**
+2. **Configure OTLP endpoint**
 
-     Add your Sentry OTLP endpoint...
+   Add your Sentry OTLP endpoint...
 
 </Steps>
-```
+````
 
 ### Card Grid Component
 

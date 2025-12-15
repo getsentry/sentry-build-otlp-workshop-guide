@@ -22,31 +22,8 @@ This waterfall view shows:
 - **When it happened**: The sequence of operations
 - **How long it took**: Performance bottlenecks
 
-<details>
-<summary>Visualizing Traces - Alt view</summary>
-
-Here's how a typical e-commerce order flow looks in Sentry's trace view:
-
-```
-Trace ID: 8f7e6d5c4b3a2910
-
-Transaction: pageload (Frontend)                     [200ms]
-  > Span: React.render                               [50ms]
-  > Span: fetch POST /api/orders                     [150ms]
-
-Transaction: POST /api/orders (Backend)              [145ms]
-  > Span: middleware.authenticate                    [5ms]
-  > Span: db.query - SELECT FROM users               [10ms]
-  > Span: cache.get - products:123                   [2ms]
-  > Span: db.query - SELECT FROM products            [8ms]
-  > Span: http.request - Payment API                 [80ms]
-  > Span: db.query - INSERT INTO orders              [15ms]
-  > Span: cache.set - order:456                      [3ms]
-```
-</details>
-
 :::note[About Transactions in Sentry]
-You may see the term "transactions" in Sentry's UI and Docs - these represent top-level spans that mark transactional operations in the flow of your services, such as pageloads, navigation events, and HTTP server requests. Sentry is moving away from this term to better align with OpenTelemetry terminology.
+You may see the term "transactions" in Sentry's UI and Docs - these represent top-level spans that mark transactional operations in the flow of your services, such as pageloads, navigation events, and HTTP server requests. Sentry is moving away from this term to better align with OpenTelemetry standards.
 :::
 
 ### The Anatomy of a Trace
