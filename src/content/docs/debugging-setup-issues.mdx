@@ -1,49 +1,11 @@
 ---
-title: Debugging Common Setup Issues
+title: Debugging Demo Application
 description: Troubleshoot and resolve common OpenTelemetry and Sentry configuration issues
 ---
 
 import { Steps } from '@astrojs/starlight/components';
 
-## Issue 1: Not Seeing Any Traces in Sentry
-
-### Symptoms
-- Backend is running
-- API requests are successful
-- But no traces appear in Sentry
-
-### Diagnosis Steps
-
-<Steps>
-  1. **Verify .env configuration**
-
-     Open `api/.env` and check:
-     ```bash
-     OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://YOUR-ORG.ingest.us.sentry.io/api/YOUR-PROJECT-ID/integration/otlp/v1/traces
-     OTEL_EXPORTER_OTLP_TRACES_HEADERS=x-sentry-auth=sentry sentry_key=YOUR_PUBLIC_KEY
-     ```
-
-     Common mistakes:
-     - Wrong endpoint format (missing `/integration/otlp/v1/traces`)
-     - Incorrect project ID or organization slug
-
-  2. **Test with a simple request**
-
-     ```bash
-     curl http://localhost:3000/api/products
-     ```
-
-     Then check Sentry after 10-15 seconds (there can be a slight delay).
-
-  3. **Check for errors in backend logs**
-
-     Look for errors like:
-     - `Error: getaddrinfo ENOTFOUND` - DNS resolution failed (check endpoint URL)
-     - `401 Unauthorized` - Authentication failed (check your public key)
-     - `404 Not Found` - Wrong endpoint path
-</Steps>
-
-## Issue 2: Frontend and Backend Traces Not Connecting
+## Issue 1: Frontend and Backend Traces Not Connecting
 
 ### Symptoms
 - You see frontend traces in Sentry
@@ -96,35 +58,7 @@ import { Steps } from '@astrojs/starlight/components';
      - But they must be in the same Sentry **organization** - otherwise, Sentry can't link the traces
 </Steps>
 
-## Issue 3: Authentication Errors
-
-### Symptoms
-- Backend logs show `401 Unauthorized` errors
-- Traces are not appearing in Sentry
-- Error messages about invalid authentication
-
-### Solutions
-
-<Steps>
-  1. **Double-check your public key in the auth header**
-
-     In `api/.env`, verify the header format:
-     ```bash
-     OTEL_EXPORTER_OTLP_TRACES_HEADERS=x-sentry-auth=sentry sentry_key=YOUR_PUBLIC_KEY
-     ```
-
-     Common mistakes:
-     - Typo in `sentry_key=` format
-     - Using DSN instead of just the public key
-
-  2. **Get the correct key from Sentry**
-
-     Go to **Settings** > **Projects** > [Your Project] > **Client Keys (DSN)**
-
-     Copy the **OTLP Traces Endpoint Headers** value directly from the UI.
-</Steps>
-
-## Issue 4: Traces Missing Database Queries
+## Issue 2: Traces Missing Database Queries
 
 ### Symptoms
 - Traces appear in Sentry
@@ -207,7 +141,7 @@ import { Steps } from '@astrojs/starlight/components';
      - `db.name: neondb` (or your database name)
 </Steps>
 
-## Issue 5: Too Many or Too Few Spans
+## Issue 3: Too Many or Too Few Spans
 
 ### Too Many Spans
 

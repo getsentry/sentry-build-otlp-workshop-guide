@@ -60,16 +60,16 @@ export default defineConfig({
             collapsed: true,
             items: [
               {
-                label: 'Debugging Common Setup Issues',
-                slug: 'debugging-setup-issues',
+                label: 'Investigating Errors with Logs & Traces',
+                slug: 'investigating-errors',
               },
               {
                 label: 'Investigating Performance Issues',
                 slug: 'investigating-performance',
               },
               {
-                label: 'Investigating Errors with Logs & Traces',
-                slug: 'investigating-errors',
+                label: 'Debugging Demo Application',
+                slug: 'debugging-setup-issues',
               },
             ],
           },

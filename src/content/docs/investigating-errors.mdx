@@ -29,8 +29,6 @@ This context is invaluable for debugging production issues.
 
 ## Using Sentry Logs with OTLP
 
-When you send logs via OTLP, Sentry automatically connects them to active traces. This means every log entry is linked to the span that generated it, giving you seamless navigation from logs to traces and back.
-
 <Aside type="tip">
 **OTLP Logs Capabilities**: With OTLP logs, you can search by severity level, custom properties, and trace IDs. Logs are automatically connected to traces, but you won't have automatic error grouping and issue detection like with Sentry SDK. You'll rely on structured logging and trace context for debugging.
 </Aside>
@@ -51,7 +49,7 @@ Users are reporting failed checkouts. Let's use logs and traces to understand wh
    Use the search bar to filter logs:
 
    ```
-   severity:error AND payment.status:failed
+   severity is error AND exception.message is payment failed (toggle ignore case in search bar)
    ```
 
    Or search by text:
@@ -67,7 +65,7 @@ Users are reporting failed checkouts. Let's use logs and traces to understand wh
 
    ```json
    {
-     "severity": "warn",
+     "severity": "error",
      "message": "Payment failed for order",
      "order.id": 42,
      "order.user_id": 1,
@@ -82,13 +80,13 @@ Users are reporting failed checkouts. Let's use logs and traces to understand wh
    Click the **trace_id** link or the "View Trace" button. This opens the Trace Waterfall View showing:
 
    ```
-   └─ POST /api/orders (650ms) [order.status: cancelled]
+   └─ POST /api/orders (650ms)
       ├─ order.validate_user (45ms)
       ├─ order.validate_products (220ms)
       ├─ inventory.check (180ms)
       ├─ order.create_record (95ms)
       ├─ inventory.reserve (145ms)
-      └─ payment.process (250ms) [payment.status: failed]
+      └─ payment.process (250ms) [payment.status: error]
    ```
 
 5. **Understand the failure flow**
@@ -104,23 +102,24 @@ Users are reporting failed checkouts. Let's use logs and traces to understand wh
 
 6. **Group failures by reason**
 
-   Back in Logs Explorer, search:
+   Back in Logs Explorer, filter:
    ```
-   payment.status:failed
+   severity is error
    ```
 
-   Add `payment.reason` as a column to see the distribution:
-   - `card_declined`: 45%
-   - `insufficient_funds`: 30%
-   - `expired_card`: 15%
-   - `invalid_cvv`: 10%
+   Click the **Aggregates** tab, then:
+   - Group by: `exception.message`
 
-   This helps prioritize which payment errors to improve messaging for.
+   You'll see the distribution of error types:
+   - `Product not found`: 4
+   - `Insufficient inventory for one or more items`: 45
+   - `Connection terminated due to connection timeout`: 31
+   - `password authentication failed for user 'neondb_owner'`: 26
+   - `Payment failed: expired_card`: 6
+   - `Payment failed: card_declined`: 11
+
+   This helps prioritize which errors need investigation - connection and authentication errors may indicate infrastructure issues, while payment failures might need better user messaging.
 </Steps>
-
-<Aside>
-**Key insight**: The trace shows that even though payment failed, your application properly rolled back inventory and updated the order status. This is correct behavior, not a bug. You might want to improve user-facing error messages for specific payment failure reasons.
-</Aside>
 
 ---
 
@@ -133,12 +132,12 @@ Your logs show 404 errors for product lookups. Are these legitimate missing prod
 
    In Logs Explorer:
    ```
-   severity:error AND "Product not found"
+   severity is error AND "Product not found"
    ```
 
    Or filter by custom properties:
    ```
-   error.code:NOT_FOUND AND http.route:/api/products
+   exception.code is NOT_FOUND AND http.path is /api/products
    ```
 
 2. **Examine the error details**
@@ -149,11 +148,9 @@ Your logs show 404 errors for product lookups. Are these legitimate missing prod
    {
      "severity": "error",
      "message": "Product not found",
-     "error.code": "NOT_FOUND",
-     "http.route": "/api/products/:id",
+     "exception.code": "NOT_FOUND",
      "http.method": "GET",
-     "http.status_code": 404,
-     "product_id": 999,
+     "http.path": "/api/products/:id",
      "trace_id": "x1y2z3..."
    }
    ```
@@ -163,9 +160,9 @@ Your logs show 404 errors for product lookups. Are these legitimate missing prod
    Click the trace link. You'll see:
 
    ```
-   └─ GET /api/products/999 (85ms) [http.status_code: 404]
+   └─ GET /api/products/999 (85ms)
       ├─ cache.get (3ms) [cache.hit: false]
-      └─ db SELECT products (78ms) [rows_returned: 0]
+      └─ db SELECT products (78ms)
    ```
 
    **Analysis**:
@@ -173,253 +170,23 @@ Your logs show 404 errors for product lookups. Are these legitimate missing prod
    - Database returned 0 rows
    - This is a legitimate "product doesn't exist" case
 
-4. **Identify the pattern**
+4. **Analyze frequency over time**
 
-   Search all product not found errors:
-   ```
-   error.code:NOT_FOUND AND http.route:/api/products/:id
-   ```
-
-   Look at the `product_id` values in the logs. Are they:
-   - Sequential probing (999, 1000, 1001)? Possible bot/scraper
-   - Random high numbers? Links to deleted products
-   - Previously valid IDs? Data integrity issue
-
-5. **Cross-reference with Trace Explorer**
-
-   Go to **Explore** > **Traces** and search:
-   ```
-   http.status_code:404 AND http.route:/api/products/:id
-   ```
-
-   Create a time series chart to see the pattern:
+   In the Logs Explorer, click on the chart view to see when these errors occur:
    - Is this a sudden spike?
    - Is it consistent traffic?
    - Does it correlate with deployments?
-</Steps>
 
-<Aside type="tip">
-**Pro tip**: If you see 404s for previously valid product IDs, check if products are being deleted without updating related records (order history, cart items, etc.). Use the trace to see which user_id is encountering these errors.
-</Aside>
+5. **Group by error patterns**
 
----
-
-## Scenario 3: Debugging Insufficient Inventory Errors
-
-Orders are failing due to inventory issues. Let's investigate why.
-
-<Steps>
-1. **Search for inventory failures**
-
-   In Logs Explorer:
-   ```
-   "Insufficient inventory" OR inventory.check_failed
-   ```
-
-   Or using structured properties:
-   ```
-   order.status:failed AND inventory.all_available:false
-   ```
-
-2. **Examine the log entry**
-
-   Expand a log:
-
-   ```json
-   {
-     "severity": "error",
-     "message": "Insufficient inventory for one or more items",
-     "order.user_id": 5,
-     "order.items_count": 2,
-     "inventory.check_failed": true,
-     "unavailable_count": 1,
-     "trace_id": "abc123..."
-   }
-   ```
-
-3. **Navigate to trace details**
-
-   Open the trace waterfall:
-
-   ```
-   └─ POST /api/orders (280ms) [order.status: failed]
-      ├─ order.validate_user (45ms)
-      ├─ order.validate_products (220ms)
-      └─ inventory.check (180ms) [inventory.all_available: false]
-         ├─ db SELECT products (55ms) [product: "Laptop", available: 50, requested: 1]
-         └─ db SELECT products (58ms) [product: "Mouse", available: 0, requested: 5]
-   ```
-
-4. **Identify the problematic product**
-
-   In the trace, look at span attributes on the `inventory.check` span:
-
-   Click the span for the second product to see:
-   ```
-   product_id: 42
-   sku: "MOUSE-001"
-   name: "Wireless Mouse"
-   inventory.requested: 5
-   inventory.available: 0
-   inventory.sufficient: false
-   ```
-
-5. **Check for concurrent order issues**
-
-   This could be a race condition. Search for traces around the same time:
-
-   ```
-   order.status:confirmed AND product_id:42
-   ```
-
-   If you see multiple successful orders for the same product within seconds, you may have a race condition where inventory isn't being reserved atomically.
-
-6. **Use logs to track inventory changes**
-
-   Search for all inventory operations on this product:
-
-   ```
-   product_id:42 AND (inventory.reserved OR inventory.released)
-   ```
-
-   This shows the sequence of inventory changes and helps identify overselling.
-</Steps>
-
-<Aside>
-**What to look for**:
-- Are inventory checks and reservations in the same transaction? (they should be)
-- Are there time gaps between check and reserve? (race condition vulnerability)
-- Is inventory being released properly on payment failures?
-</Aside>
-
----
-
-## Scenario 4: Investigating Database Transaction Rollbacks
-
-Your logs show transaction rollbacks. What's causing them?
-
-<Steps>
-1. **Search for rollback events**
-
-   In Logs Explorer:
-   ```
-   order.transaction_status:rolled_back
-   ```
-
-   Or search for the event:
-   ```
-   "transaction_failed"
-   ```
-
-2. **Examine the log context**
-
-   ```json
-   {
-     "severity": "error",
-     "message": "Order transaction failed",
-     "order.user_id": 3,
-     "order.transaction_status": "rolled_back",
-     "error": "duplicate key value violates unique constraint",
-     "trace_id": "def456..."
-   }
-   ```
-
-3. **Open the trace waterfall**
-
-   ```
-   └─ POST /api/orders (150ms) [status: error]
-      ├─ order.validate_user (45ms)
-      ├─ order.validate_products (220ms)
-      └─ order.create_record (95ms) [transaction_status: rolled_back]
-         ├─ db BEGIN (2ms)
-         ├─ db INSERT orders (40ms)
-         ├─ db INSERT order_items (35ms) [ERROR]
-         └─ db ROLLBACK (5ms)
-   ```
-
-4. **Identify the root cause**
-
-   The trace shows the exact point of failure. Check span attributes on the failed INSERT:
-
-   ```
-   db.statement: INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (...)
-   db.error: duplicate key value violates unique constraint "order_items_pkey"
-   ```
-
-5. **Correlate with other traces**
-
-   Search for other rollbacks:
-   ```
-   db.error:"duplicate key"
-   ```
-
-   If this is recurring, you may have:
-   - Retry logic creating duplicates
-   - Concurrent requests from the same user
-   - ID generation issues
-</Steps>
-
----
-
-## Scenario 5: Tracking Validation Errors
-
-Users are encountering validation errors. Let's understand which validations are failing most often.
-
-<Steps>
-1. **Search for validation failures**
-
-   In Logs Explorer:
-   ```
-   error.code:VALIDATION_ERROR
-   ```
-
-2. **Add columns for context**
-
-   Click **Add Column** and add:
-   - `http.route`
-   - `http.method`
-   - `validation.field` (if your app logs this)
-
-3. **Identify patterns**
-
-   You might see:
-   ```
-   http.route: /api/orders | error: "User ID must be an integer"
-   http.route: /api/orders | error: "Items must be a non-empty array"
-   http.route: /api/products/:id | error: "Invalid product ID"
-   ```
-
-4. **View a trace for context**
-
-   Open a trace to see the full request:
-
-   ```
-   └─ POST /api/orders (5ms) [http.status_code: 400]
-      └─ validation failed (2ms)
-   ```
-
-   The trace is short because validation happens early (fast-fail).
-
-5. **Check request attributes**
-
-   In the trace span, you'll see attributes like:
-   ```
-   http.request.body.userId: "abc" (should be integer)
-   http.request.body.items: [] (should be non-empty)
-   ```
-
-6. **Create an alert**
-
-   If validation errors spike, it might indicate:
-   - API breaking changes
-   - Client integration issues
-   - Malicious traffic
-
-   Create an alert:
-   ```
-   Query: error.code:VALIDATION_ERROR
-   Threshold: > 100 errors per minute
-   ```
+   Click the **Aggregates** tab and group by:
+   - `exception.message` - See the exact error messages
+   - `http.path` - Identify which endpoints have the most not found errors
+   
+   This helps you understand:
+   - Are errors concentrated on specific paths?
+   - Are these likely bot/scraper traffic patterns?
+   - Do you need to add better error handling or caching?
 </Steps>
 
 ---
@@ -435,7 +202,7 @@ Beyond errors, logs help you monitor application behavior.
 
    Search logs:
    ```
-   severity:info AND "Order created successfully"
+   severity is info AND message is Order created successfully
    ```
 
    View properties:
@@ -446,70 +213,41 @@ Beyond errors, logs help you monitor application behavior.
    payment.transaction_id: txn_123
    ```
 
-2. **Create a dashboard widget**
+2. **Create dashboard widgets**
 
-   Add a chart showing:
-   - Count of successful orders over time
-   - Average order value from `order.total_amount`
-   - Distribution of `order.items_count`
+   From the Logs Explorer query, save as dashboard widgets:
+   
+   **Widget 1: Order Volume**
+   - Metric: `count()`
+   - Visualization: Time Series
+   
+   **Widget 2: Average Order Value**
+   - Metric: `avg(order.total_amount)`
+   - Visualization: Big Number or Time Series
+   
+   **Widget 3: Items per Order**
+   - Group by: `order.items_count`
+   - Metric: `count()`
+   - Visualization: Table or Bar Chart
 
 3. **Track cache effectiveness**
 
-   Search:
+   Create a Time Series widget with two series to compare:
+   
+   **Series 1: Cache Hits**
    ```
-   "Products fetched from cache"
+   message contains "Products fetched from cache"
    ```
-
-   Compare with:
+   Metric: `count()`
+   
+   **Series 2: Database Fetches**
    ```
-   "Products fetched from database"
+   message contains "Products fetched from database"
    ```
-
-   Calculate your cache hit rate.
+   Metric: `count()`
+   
+   View both series on the same chart to visualize your cache hit rate over time.
 </Steps>
-
----
-
-## Advanced Log Querying
-
-Sentry supports powerful search syntax for OTLP logs:
-
-### Search by Severity
-```
-severity:error              # Only errors
-severity:warn OR severity:error   # Warnings and errors
-```
-
-### Search by Custom Properties
-```
-user.id:12345              # Specific user
-order.total_amount:>1000   # High-value orders
-order.items_count:>3       # Large orders
-```
-
-### Search by Trace ID
-```
-trace_id:a1b2c3d4e5f6...   # All logs for a specific trace
-```
-
-### Combine Filters
-```
-severity:error AND payment.status:failed AND order.total_amount:>500
-```
-
-### Text Search
-```
-"Payment failed"           # Case-sensitive message search
-database:"users"           # Search in specific property
-```
-
-<Aside type="note">
-**OTLP Logs Limitations**:
-- Text search is case-sensitive and searches only in the `message` attribute
-- No automatic error grouping (like Sentry Issues)
-- No stack traces unless you include them in log messages
-- Rely on structured properties for effective filtering
-</Aside>
 
 ---
 
@@ -534,58 +272,6 @@ The power of OTLP observability is in the connections:
 4. **Aggregations** reveal patterns
 5. **Alerts** notify you proactively
 
-<Steps>
-1. **Start with a symptom** (log error)
-2. **Understand the flow** (trace waterfall)
-3. **Identify patterns** (aggregations)
-4. **Create monitoring** (dashboards & alerts)
-5. **Prevent recurrence** (code fixes)
-</Steps>
-
----
-
-## Best Practices for OTLP Logging
-
-To get the most out of Sentry Logs with OTLP:
-
-### 1. Use Structured Logging
-```javascript
-// Good
-logger.info('Order created successfully', {
-  'order.id': orderId,
-  'order.user_id': userId,
-  'order.total_amount': totalAmount,
-  'payment.transaction_id': transactionId
-});
-
-// Avoid
-logger.info(`Order ${orderId} created for user ${userId}`);
-```
-
-### 2. Include Context in Every Log
-- User IDs
-- Order/Product IDs
-- Relevant business metrics
-- Error codes and reasons
-
-### 3. Use Consistent Property Naming
-```javascript
-// Consistent
-order.id, order.user_id, order.total_amount
-
-// Inconsistent (harder to query)
-orderId, user, total
-```
-
-### 4. Log at Appropriate Levels
-- `error`: Things that require immediate attention
-- `warn`: Concerning but handled (payment failures, validation errors)
-- `info`: Important business events (order created, payment processed)
-- `debug`: Detailed troubleshooting info
-
-### 5. Connect Logs to Traces
-Your OpenTelemetry SDK automatically adds trace context to logs. Make sure you're using the logger correctly to maintain this connection.
-
 ---
 
 ## Setting Up Error and Log Alerts
@@ -594,121 +280,53 @@ Don't wait for users to report issues. Create proactive alerts based on log patt
 
 ### How to Create Log Alerts
 
-From Logs Explorer, click **Save As** > **Alert** after running your query. Configure:
-- **Query**: The log filter that identifies the error condition
-- **Threshold**: Error count or rate that indicates a problem
-- **Time Window**: How long to aggregate (per minute, per hour)
-- **Action**: Notification channels (email, Slack, PagerDuty)
+From Logs Explorer, click **Save As** > **Alert** after running your query. Then configure:
+
+1. **Define your metric**: Choose `count` with your desired interval
+2. **Filter events**: Add your search query to filter specific logs
+3. **Set thresholds**: Define Critical/Warning/Resolved levels
+4. **Set actions**: Configure notification channels (email, Slack, PagerDuty)
 
 ### Critical Error Alerts
 
 <Steps>
 1. **High Error Rate**
 
-   ```
-   Query: severity:error
-   Threshold: > 50 per minute
-   ```
+   - **Metric**: `count(logs)`
+   - **Filter**: `severity is error`
+   - **Interval**: 1 hour
+   - **Threshold**: Critical when above 50
 
    **Why**: Sudden spike in errors indicates a deployment issue, infrastructure problem, or attack. This is your canary alert.
 
-   **Recommended Action**: Page on-call engineer immediately.
-
 2. **Payment Failure Spike**
 
-   ```
-   Query: payment.status:failed
-   Threshold: > 10 per minute
-   ```
+   - **Metric**: `count(logs)`
+   - **Filter**: `message contains "Payment failed"`
+   - **Interval**: 1 hour
+   - **Threshold**: Critical when above 10
 
    **Why**: Payment failures directly impact revenue. While some failures are expected (expired cards), a spike indicates payment gateway issues or integration bugs.
 
-   **Recommended Action**: Alert payment ops team. Check gateway status page.
+3. **Database Connection Errors**
 
-3. **Database Connection Pool Exhaustion**
+   - **Metric**: `count(logs)`
+   - **Filter**: `severity is error AND message contains "connection"`
+   - **Interval**: 1 hour
+   - **Threshold**: Critical when above 5
 
-   ```
-   Query: "connection pool" AND severity:error
-   Threshold: > 5 per minute
-   ```
+   **Why**: Connection errors mean your app can't reach the database. This causes cascading failures across all endpoints.
 
-   **Why**: Connection pool errors mean your app can't reach the database. This causes cascading failures across all endpoints.
+4. **Inventory Issues**
 
-   **Recommended Action**: Page on-call immediately. May need to restart app or increase pool size.
-
-4. **Inventory Overselling Risk**
-
-   ```
-   Query: inventory.all_available:false
-   Threshold: > 20 per hour
-   ```
+   - **Metric**: `count(logs)`
+   - **Filter**: `message contains "Insufficient inventory"`
+   - **Interval**: 1 hour
+   - **Threshold**: Warning when above 20
 
    **Why**: Frequent inventory failures might indicate a race condition where multiple orders can reserve the same stock.
 
-   **Recommended Action**: Alert engineering team to investigate transaction isolation.
-
-5. **Transaction Rollback Rate**
-
-   ```
-   Query: order.transaction_status:rolled_back
-   Threshold: > 10 per hour
-   ```
-
-   **Why**: Transaction failures indicate database issues, constraint violations, or application bugs that need investigation.
-
-   **Recommended Action**: Alert engineering team. Review error logs for patterns.
-
-6. **Product Not Found (404) Spike**
-
-   ```
-   Query: http.status_code:404 AND http.route:/api/products/:id
-   Threshold: > 100 per hour
-   ```
-
-   **Why**: Sudden 404 spikes could mean:
-   - Products were deleted but referenced elsewhere
-   - Bot/scraper probing your API
-   - Frontend using stale product IDs
-
-   **Recommended Action**: Low severity alert. Investigate pattern during business hours.
-
-7. **Validation Error Increase**
-
-   ```
-   Query: error.code:VALIDATION_ERROR
-   Threshold: > 200 per hour
-   ```
-
-   **Why**: Validation error spikes indicate:
-   - API breaking changes
-   - Client integration issues
-   - Malicious traffic
-
-   **Recommended Action**: Alert API team. Check if related to recent deployment.
-
-8. **User-Specific Error Pattern**
-
-   ```
-   Query: severity:error AND user.id:*
-   Group By: user.id
-   Threshold: Same user > 10 errors per minute
-   ```
-
-   **Why**: One user hitting many errors could be:
-   - Testing/QA finding bugs
-   - Malicious user probing for vulnerabilities
-   - Integration issue with specific account
-
-   **Recommended Action**: Investigate user's activity. May need to throttle or contact them.
 </Steps>
-
-<Aside type="tip">
-**Alert Tuning Tips**:
-- Start with higher thresholds and lower gradually based on noise level
-- Use different severities: Critical (page), High (Slack), Medium (email)
-- Set up alert dependencies: Don't alert on payment failures if the gateway is already alerting
-- Review alert effectiveness weekly: Are we catching issues? Are there false positives?
-</Aside>
 
 ---
 
@@ -727,132 +345,52 @@ From Logs Explorer, click **Save As** > **Dashboard Widget** after running your 
 
 #### 1. Error Rate Overview
 
-**Widget Type**: Time Series
+**Widget Type**: Bar or Time Series
 **Configuration**:
-```
-Query: severity:error
-Metric: count() per minute
-```
+- **Dataset**: Logs
+- **Visualize**: `count`
+- **Filter**: `severity is error`
 
 **Why**: Single pane of glass for overall application health. Spikes indicate incidents.
 
 #### 2. Error Rate by Severity
 
-**Widget Type**: Time Series (stacked)
-**Queries**:
-```
-Query 1: severity:error
-Metric: count()
+**Widget Type**: Time Series
+**Configuration**: Add multiple series (click **+ Add Series**)
 
-Query 2: severity:warn
-Metric: count()
+**Series 1:**
+- **Visualize**: `count`
+- **Filter**: `severity is error`
+- **Legend Alias**: "Errors"
 
-Query 3: severity:critical
-Metric: count()
-```
+**Series 2:**
+- **Visualize**: `count`
+- **Filter**: `severity is warn`
+- **Legend Alias**: "Warnings"
 
 **Why**: Understand error severity distribution. Increasing warnings might predict future errors.
 
-#### 3. Top Error Types
+#### 3. Top Error Messages
 
 **Widget Type**: Table
 **Configuration**:
-```
-Query: severity:error
-Group By: error.code
-Metrics:
-  - count()
-Sort By: count() DESC
-Limit: 10
-```
+- **Dataset**: Logs
+- **Visualize**: `count`
+- **Filter**: `severity is error`
+- **Group by**: `exception.message`
 
-**Why**: Focus engineering effort on most common errors.
+**Why**: Focus engineering effort on most common errors. Sort by count descending to see top issues.
 
-#### 4. Payment Failure Reasons
+#### 4. Payment Failure Breakdown
 
-**Widget Type**: Pie Chart or Table
+**Widget Type**: Table or Bar Chart
 **Configuration**:
-```
-Query: payment.status:failed
-Group By: payment.reason
-Metric: count()
-```
+- **Dataset**: Logs
+- **Visualize**: `count`
+- **Filter**: `message contains "Payment failed"`
+- **Group by**: `exception.message`
 
 **Why**: Understand why payments fail. Improve error messages or fraud detection based on patterns.
-
-#### 5. Failed Orders Over Time
-
-**Widget Type**: Time Series
-**Configuration**:
-```
-Query: order.status:failed OR order.status:cancelled
-Metric: count() per hour
-```
-
-**Why**: Track business impact of errors. Correlate with revenue loss.
-
-#### 6. Database Errors by Type
-
-**Widget Type**: Table
-**Configuration**:
-```
-Query: severity:error AND db.error:*
-Group By: db.error
-Metrics:
-  - count()
-  - List of affected users
-```
-
-**Why**: Database errors often indicate schema issues, constraint violations, or connection problems.
-
-#### 7. 404 Errors by Endpoint
-
-**Widget Type**: Table
-**Configuration**:
-```
-Query: http.status_code:404
-Group By: http.route
-Metric: count()
-Sort By: count() DESC
-```
-
-**Why**: Identify broken links, deleted resources, or bot activity.
-
-#### 8. Error Rate by User
-
-**Widget Type**: Table
-**Configuration**:
-```
-Query: severity:error AND user.id:*
-Group By: user.id
-Metric: count()
-Limit: 20
-```
-
-**Why**: Identify if specific users are having outsized issues. May indicate account-specific bugs.
-
-#### 9. Inventory Issues Trend
-
-**Widget Type**: Time Series
-**Configuration**:
-```
-Query: inventory.all_available:false
-Metric: count() per hour
-```
-
-**Why**: Monitor inventory reservation failures. Spike might indicate popular product or overselling bug.
-
-#### 10. Log Volume by Severity
-
-**Widget Type**: Time Series (area chart)
-**Configuration**:
-```
-Query: severity:*
-Group By: severity
-Metric: count()
-```
-
-**Why**: Understand overall logging volume. Sudden increase in any severity level warrants investigation.
 
 <Aside type="note">
 **Dashboard Best Practices**:
